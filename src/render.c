@@ -128,6 +128,7 @@ static void draw_ui(void) {
         mvprintw_clip(row++, px, UI_W-2, "[e] grenade");
         mvprintw_clip(row++, px, UI_W-2, "[g] pick up");
         mvprintw_clip(row++, px, UI_W-2, "[i] inventory");
+        mvprintw_clip(row++, px, UI_W-2, "[m] map");
         mvprintw_clip(row++, px, UI_W-2, "[.] wait");
         mvprintw_clip(row++, px, UI_W-2, "[?] manual");
         mvprintw_clip(row++, px, UI_W-2, "[q] quit");
@@ -265,32 +266,99 @@ void render_game(void) {
 }
 
 /* ─── Title screen ──────────────────────────────────────────────────── */
+
+static const char *TOWER_ART[] = {
+    "                          _,,_                          ",
+    "                        ,`    `,                        ",
+    "                       / | __ | \\                      ",
+    "                      |  |_  _|  |                      ",
+    "                     /|  |/  \\|  |\\                   ",
+    "                    | |  | /\\ |  | |                    ",
+    "                   /| |__|/  \\|__| |\\                 ",
+    "                  | |  _/ /--\\ \\_  | |                ",
+    "                 /'-| |_|      |_| |-'\\                ",
+    "                |   |  | |  | |  |   |                  ",
+    "               /| .-|--|_|  |_|--|-.| |\\               ",
+    "              | | |  \\__________/  | | |               ",
+    "             /| | |_.-'        `-._| | |\\              ",
+    "            | | | /   ()    ()   \\ | | | |             ",
+    "           /| |_|/  _|__|  |__|_  \\|_| | |\\          ",
+    "          | |,' /_,'          `._\\ `.|_| | |           ",
+    "         /|,'  /  __|        |__  \\  `.|_| |\\        ",
+    "        | ,'  / /    \\      /    \\ \\  `. | | |       ",
+    "       /,'   | | [  ] |    | [  ] | |   `.|_|\\        ",
+    "      /  \\   |_|______|    |______|_|   /  \\ \\       ",
+    "     / /\\ \\   \\========\\  /========/   / /\\ \\ \\ ",
+    "    /_/ /\\_\\___\\========\\/========/___/_/ \\_\\_\\ ",
+    "   /   /  \\_____|========|========|_____/  \\   \\      ",
+    "  /___/ /\\ \\====|________|________|====/ /\\ \\___\\  ",
+    " /     /  \\_\\---|                  |---/_/  \\     \\ ",
+    "/______\\    \\===|__________________|===/    /______\\ ",
+    NULL
+};
+
 void render_title(void) {
     clear();
     getmaxyx(stdscr, G.th, G.tw);
-    int cy = G.th / 2 - 6;
-    int cx = (G.tw - 22) / 2;
+
+    /* Center the 56-col art horizontally */
+    int art_w = 56;
+    int art_rows = 0;
+    while (TOWER_ART[art_rows]) art_rows++;
+
+    int cx = (G.tw - art_w) / 2;
     if (cx < 0) cx = 0;
 
-    attron(COLOR_PAIR(CP_UI) | A_BOLD);
-    mvprintw(cy+0, cx, " A Tower Unto Heaven");
-    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+    /* Vertical: place art so there's room for title above and prompt below */
+    int top = G.th - art_rows - 4;
+    if (top < 2) top = 2;
 
+    /* Title */
+    int title_cx = (G.tw - 20) / 2;
+    if (title_cx < 0) title_cx = 0;
+    attron(COLOR_PAIR(CP_UI) | A_BOLD);
+    mvprintw(top - 2, title_cx, "A Tower Unto Heaven");
+    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
     attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
-    mvprintw(cy+2,  cx, "You are alone.");
-    mvprintw(cy+3,  cx, "The world dies around you.");
-    mvprintw(cy+4,  cx, "A Tower rises unto Heaven.");
-    mvprintw(cy+6,  cx, "Salvation waits at the top.");
+    mvprintw(top - 1, title_cx, "You are alone. The world dies around you.");
     attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
 
-    attron(COLOR_PAIR(CP_ITEM));
-    mvprintw(cy+9,  cx, "[ Press any key ]");
-    attroff(COLOR_PAIR(CP_ITEM));
+    /* Tower art — walls in blue, interior detail in dim white */
+    for (int i = 0; TOWER_ART[i]; i++) {
+        const char *line = TOWER_ART[i];
+        int len = (int)strlen(line);
+        for (int j = 0; j < len; j++) {
+            char c = line[j];
+            if (c == ' ') { mvaddch(top + i, cx + j, ' '); continue; }
+            /* walls / structure */
+            if (c == '/' || c == '\\' || c == '|' || c == '_') {
+                attron(COLOR_PAIR(CP_WALL) | A_BOLD);
+                mvaddch(top + i, cx + j, c);
+                attroff(COLOR_PAIR(CP_WALL) | A_BOLD);
+            /* windows / arches */
+            } else if (c == '(' || c == ')' || c == '[' || c == ']') {
+                attron(COLOR_PAIR(CP_UI));
+                mvaddch(top + i, cx + j, c);
+                attroff(COLOR_PAIR(CP_UI));
+            /* ornament */
+            } else if (c == '=' || c == '-') {
+                attron(COLOR_PAIR(CP_WALL) | A_DIM);
+                mvaddch(top + i, cx + j, c);
+                attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+            } else {
+                attron(COLOR_PAIR(CP_DEF));
+                mvaddch(top + i, cx + j, c);
+                attroff(COLOR_PAIR(CP_DEF));
+            }
+        }
+    }
 
-    attron(COLOR_PAIR(CP_WALL) | A_DIM);
-    mvprintw(G.th-2, cx, "hjkl / arrows: move  f+dir: shoot");
-    mvprintw(G.th-1, cx, "e: grenade  g: pick up  i: inventory  q: quit");
-    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+    /* Prompt */
+    int pcx = (G.tw - 17) / 2;
+    if (pcx < 0) pcx = 0;
+    attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
+    mvprintw(G.th - 2, pcx, "[ Press any key ]");
+    attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
 
     refresh();
     getch();
@@ -640,6 +708,184 @@ void render_help(void) {
 }
 
 /* ─── Inventory screen ──────────────────────────────────────────────── */
+/* ─── Map screen ────────────────────────────────────────────────────── */
+void render_map(void) {
+    while (1) {
+        clear();
+        getmaxyx(stdscr, G.th, G.tw);
+        Floor *f = G.cf;
+
+        /* ── Bounding box of visible rooms ── */
+        int min_x = 0, max_x = 0, min_y = 0, max_y = 0;
+        bool any = false;
+        for (int i = 0; i < f->n_rooms; i++) {
+            Room *r = &f->rooms[i];
+            /* Include visited rooms, and unvisited rooms adjacent to visited */
+            bool show = r->visited;
+            if (!show) {
+                for (int d = 0; d < 4; d++) {
+                    int nb = r->conn[d];
+                    if (nb >= 0 && f->rooms[nb].visited) { show = true; break; }
+                }
+            }
+            if (!show) continue;
+            int mx = r->map_x, my = r->map_y;
+            if (!any) { min_x = max_x = mx; min_y = max_y = my; any = true; }
+            else {
+                if (mx < min_x) min_x = mx; if (mx > max_x) max_x = mx;
+                if (my < min_y) min_y = my; if (my > max_y) max_y = my;
+            }
+        }
+
+        /* ── Scale to fit available area ── */
+        int avail_w = G.tw - 4;
+        int avail_h = G.th - 7;
+        int map_span_x = (max_x - min_x) + 1;
+        int map_span_y = (max_y - min_y) + 1;
+        int sx = 5, sy = 3;
+        while (map_span_x * sx > avail_w && sx > 2) sx--;
+        while (map_span_y * sy > avail_h && sy > 2) sy--;
+
+        /* Origin: top-left of centred map block */
+        int ox = 2 + (avail_w - map_span_x * sx) / 2;
+        int oy = 3 + (avail_h - map_span_y * sy) / 2;
+
+#define MX(mx) (ox + ((mx) - min_x) * sx)
+#define MY(my) (oy + ((my) - min_y) * sy)
+
+        /* ── Header ── */
+        attron(COLOR_PAIR(CP_UI) | A_BOLD);
+        mvprintw(0, (G.tw - 28) / 2,
+                 "Floor %d/%d  —  Explored Map",
+                 G.player.floor_num + 1, NUM_FLOORS);
+        attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+        attron(COLOR_PAIR(CP_UI));
+        for (int x = 0; x < G.tw; x++) mvaddch(1, x, '-');
+        attroff(COLOR_PAIR(CP_UI));
+
+        /* ── Draw connections (under room symbols) ── */
+        for (int i = 0; i < f->n_rooms; i++) {
+            if (!f->rooms[i].visited) continue;
+            int ix = MX(f->rooms[i].map_x);
+            int iy = MY(f->rooms[i].map_y);
+
+            for (int d = 0; d < 4; d++) {
+                int nb = f->rooms[i].conn[d];
+                if (nb < 0) continue;
+                int nx = MX(f->rooms[nb].map_x);
+                int ny = MY(f->rooms[nb].map_y);
+
+                int cp   = f->rooms[nb].visited ? CP_DEF : CP_WALL;
+                int attr = f->rooms[nb].visited ? 0 : A_DIM;
+                attron(COLOR_PAIR(cp) | attr);
+
+                if (iy == ny) {
+                    /* horizontal */
+                    int lx = (ix < nx) ? ix + 2 : nx + 2;
+                    int rx = (ix < nx) ? nx - 2 : ix - 2;
+                    for (int x = lx; x <= rx; x++)
+                        if (x >= 0 && x < G.tw) mvaddch(iy, x, '-');
+                } else if (ix == nx) {
+                    /* vertical */
+                    int ty = (iy < ny) ? iy + 1 : ny + 1;
+                    int by = (iy < ny) ? ny - 1 : iy - 1;
+                    for (int y = ty; y <= by; y++)
+                        if (y >= 2 && y < G.th - 4) mvaddch(y, ix, '|');
+                }
+                attroff(COLOR_PAIR(cp) | attr);
+            }
+        }
+
+        /* ── Draw room symbols (significant rooms only) ── */
+        for (int i = 0; i < f->n_rooms; i++) {
+            Room *r = &f->rooms[i];
+
+            /* Skip plain corridors / junctions — only shown as connection lines */
+            if (r->is_corridor && !r->is_alcove) continue;
+
+            /* Visibility: visited, or directly adjacent to visited */
+            bool visible = r->visited;
+            if (!visible) {
+                for (int d = 0; d < 4; d++) {
+                    int nb = r->conn[d];
+                    if (nb >= 0 && f->rooms[nb].visited) { visible = true; break; }
+                }
+            }
+            if (!visible) continue;
+
+            int sx_pos = MX(r->map_x);
+            int sy_pos = MY(r->map_y);
+            if (sy_pos < 2 || sy_pos >= G.th - 4) continue;
+            if (sx_pos < 1 || sx_pos >= G.tw - 1) continue;
+
+            const char *sym;
+            int cp, extra = 0;
+
+            if (i == G.player.current_room) {
+                sym = "[@]"; cp = CP_PLAYER; extra = A_BOLD;
+            } else if (!r->visited) {
+                sym = "[?]"; cp = CP_WALL; extra = A_DIM;
+            } else if (i == f->start_room) {
+                sym = "[S]"; cp = CP_UI;
+            } else if (r->boss_room) {
+                sym = r->cleared ? "[x]" : "[B]";
+                cp = CP_BOSS; extra = A_BOLD;
+            } else if (r->item_room) {
+                sym = "[$]"; cp = CP_ITEM;
+            } else if (r->is_alcove) {
+                sym = r->n_items > 0 ? "[.]" : "[_]"; cp = CP_WALL;
+            } else if (r->cleared) {
+                sym = "[ ]"; cp = CP_DEF; extra = A_DIM;
+            } else {
+                sym = "[!]"; cp = CP_DANGER;
+            }
+
+            attron(COLOR_PAIR(cp) | extra);
+            mvprintw(sy_pos, sx_pos - 1, "%s", sym);
+            attroff(COLOR_PAIR(cp) | extra);
+        }
+
+#undef MX
+#undef MY
+
+        /* ── Footer ── */
+        attron(COLOR_PAIR(CP_UI));
+        for (int x = 0; x < G.tw; x++) mvaddch(G.th - 3, x, '-');
+        attroff(COLOR_PAIR(CP_UI));
+
+        /* Legend */
+        int lx = 1, ly = G.th - 2;
+        struct { const char *sym; int cp; int attr; const char *label; } leg[] = {
+            { "[@]", CP_PLAYER, A_BOLD, "You"     },
+            { "[S]", CP_UI,     0,      "Start"   },
+            { "[!]", CP_DANGER, 0,      "Enemies" },
+            { "[ ]", CP_DEF,    A_DIM,  "Cleared" },
+            { "[$]", CP_ITEM,   0,      "Items"   },
+            { "[B]", CP_BOSS,   A_BOLD, "Boss"    },
+            { "[.]", CP_WALL,   0,      "Alcove"  },
+            { "[?]", CP_WALL,   A_DIM,  "Unknown" },
+        };
+        for (int k = 0; k < 8 && lx < G.tw - 12; k++) {
+            attron(COLOR_PAIR(leg[k].cp) | leg[k].attr);
+            mvprintw(ly, lx, "%s", leg[k].sym);
+            attroff(COLOR_PAIR(leg[k].cp) | leg[k].attr);
+            lx += 3;
+            attron(COLOR_PAIR(CP_DEF));
+            mvprintw(ly, lx, " %-9s", leg[k].label);
+            attroff(COLOR_PAIR(CP_DEF));
+            lx += 10;
+        }
+
+        attron(COLOR_PAIR(CP_UI) | A_DIM);
+        mvprintw(G.th - 1, (G.tw - 16) / 2, "[m / Esc] close");
+        attroff(COLOR_PAIR(CP_UI) | A_DIM);
+
+        refresh();
+        int ch = getch();
+        if (ch == 'm' || ch == 27 || ch == 'q') return;
+    }
+}
+
 /* ─── Inventory: stat line helper ──────────────────────────────────── */
 static void inv_stat(int y, int x, int w, const char *label, const char *val, int cp) {
     attron(COLOR_PAIR(CP_UI));

@@ -15,7 +15,7 @@
 #define NUM_FLOORS  3
 #define UI_W        22      /* right-side panel width */
 #define MSG_H       5       /* bottom message rows */
-#define MAX_ROOMS   12
+#define MAX_ROOMS   60
 #define MAX_ROOM_W  30      /* interior (excl. walls) */
 #define MAX_ROOM_H  14
 #define RT_W        (MAX_ROOM_W + 2)
@@ -176,7 +176,10 @@ typedef struct {
     bool cleared;
     bool boss_room;
     bool item_room;
+    bool is_corridor;
+    bool is_alcove;     /* dead-end pocket, no enemies */
     bool has_stairs;
+    int  map_x, map_y;  /* minimap grid position (set by BFS after generation) */
     Enemy    enemies[MAX_ROOM_EN];
     int      n_enemies;
     ItemType items[MAX_ROOM_IT];
@@ -306,5 +309,6 @@ void  render_game_over(void);
 void  render_win(void);
 void  render_inventory(int *sel);
 void  render_help(void);
+void  render_map(void);
 
 #endif /* GAME_H */

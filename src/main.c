@@ -60,6 +60,11 @@ static bool handle_input(int ch) {
             return false;
         }
 
+        /* Map */
+        case 'm': case 'M':
+            render_map();
+            return false;
+
         /* Help */
         case '?':
             render_help();
