@@ -354,63 +354,85 @@ void render_title(void) {
     clear();
     getmaxyx(stdscr, G.th, G.tw);
 
-    /* Center the 56-col art horizontally */
     int art_w = 56;
     int art_rows = 0;
     while (TOWER_ART[art_rows]) art_rows++;
 
-    int cx = (G.tw - art_w) / 2;
-    if (cx < 0) cx = 0;
+    /* Art: right-aligned, fills rows 0..art_area, clipping spire top if short */
+    int art_area = G.th - 2;   /* reserve bottom row for prompt */
+    int skip = art_rows - art_area;
+    if (skip < 0) skip = 0;
+    int art_cx = G.tw - art_w;
+    if (art_cx < 0) art_cx = 0;
 
-    /* Vertical: place art so there's room for title above and prompt below */
-    int top = G.th - art_rows - 4;
-    if (top < 2) top = 2;
-
-    /* Title */
-    int title_cx = (G.tw - 20) / 2;
-    if (title_cx < 0) title_cx = 0;
-    attron(COLOR_PAIR(CP_UI) | A_BOLD);
-    mvprintw(top - 2, title_cx, "A Tower Unto Heaven");
-    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
-    attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
-    mvprintw(top - 1, title_cx, "You are alone. The world dies around you.");
-    attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
-
-    /* Tower art — walls in blue, interior detail in dim white */
-    for (int i = 0; TOWER_ART[i]; i++) {
+    for (int i = skip; TOWER_ART[i]; i++) {
+        int row = i - skip;
+        if (row >= G.th - 1) break;
         const char *line = TOWER_ART[i];
         int len = (int)strlen(line);
         for (int j = 0; j < len; j++) {
             char c = line[j];
-            if (c == ' ') { mvaddch(top + i, cx + j, ' '); continue; }
-            /* walls / structure */
+            if (c == ' ') { mvaddch(row, art_cx + j, ' '); continue; }
             if (c == '/' || c == '\\' || c == '|' || c == '_') {
                 attron(COLOR_PAIR(CP_WALL) | A_BOLD);
-                mvaddch(top + i, cx + j, c);
+                mvaddch(row, art_cx + j, c);
                 attroff(COLOR_PAIR(CP_WALL) | A_BOLD);
-            /* windows / arches */
             } else if (c == '(' || c == ')' || c == '[' || c == ']') {
                 attron(COLOR_PAIR(CP_UI));
-                mvaddch(top + i, cx + j, c);
+                mvaddch(row, art_cx + j, c);
                 attroff(COLOR_PAIR(CP_UI));
-            /* ornament */
             } else if (c == '=' || c == '-') {
                 attron(COLOR_PAIR(CP_WALL) | A_DIM);
-                mvaddch(top + i, cx + j, c);
+                mvaddch(row, art_cx + j, c);
                 attroff(COLOR_PAIR(CP_WALL) | A_DIM);
             } else {
                 attron(COLOR_PAIR(CP_DEF));
-                mvaddch(top + i, cx + j, c);
+                mvaddch(row, art_cx + j, c);
                 attroff(COLOR_PAIR(CP_DEF));
             }
         }
     }
 
-    /* Prompt */
-    int pcx = (G.tw - 17) / 2;
-    if (pcx < 0) pcx = 0;
+    /* Intro text: left side, vertically centred alongside art */
+    static const struct { const char *text; int cp; int bold; } INTRO[] = {
+        { "A Tower Unto Heaven",          CP_UI,    1 },
+        { "",                             CP_DEF,   0 },
+        { "You are alone.",               CP_FLOOR, 0 },
+        { "The world dies around you.",   CP_FLOOR, 0 },
+        { "",                             CP_DEF,   0 },
+        { "A Tower rises unto Heaven",    CP_DEF,   0 },
+        { "",                             CP_DEF,   0 },
+        { "At its roots:",                CP_WALL,  0 },
+        { "  The dead",                   CP_DANGER,0 },
+        { "  The scavengers",             CP_DANGER,0 },
+        { "  Those consumed",             CP_DANGER,0 },
+        { "  Those who linger",           CP_DANGER,0 },
+        { "  And you",                    CP_PLAYER,0 },
+        { "",                             CP_DEF,   0 },
+        { "Salvation waits at the top.",  CP_ITEM,  1 },
+        { NULL, 0, 0 }
+    };
+    int n_intro = 0;
+    while (INTRO[n_intro].text) n_intro++;
+
+    int text_start = (art_area - n_intro) / 2;
+    if (text_start < 0) text_start = 0;
+    int text_col = 2;
+
+    for (int i = 0; i < n_intro; i++) {
+        int row = text_start + i;
+        if (row >= G.th - 1) break;
+        if (INTRO[i].text[0] == '\0') continue;
+        int attr = COLOR_PAIR(INTRO[i].cp) | (INTRO[i].bold ? A_BOLD : 0);
+        if (INTRO[i].cp == CP_FLOOR) attr |= A_DIM;
+        attron(attr);
+        mvprintw(row, text_col, "%s", INTRO[i].text);
+        attroff(attr);
+    }
+
+    /* Prompt pinned to bottom-left */
     attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
-    mvprintw(G.th - 2, pcx, "[ Press any key ]");
+    mvprintw(G.th - 1, text_col, "[ Press any key ]");
     attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
 
     refresh();
