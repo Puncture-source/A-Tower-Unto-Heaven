@@ -640,62 +640,251 @@ void render_help(void) {
 }
 
 /* ─── Inventory screen ──────────────────────────────────────────────── */
+/* ─── Inventory: stat line helper ──────────────────────────────────── */
+static void inv_stat(int y, int x, int w, const char *label, const char *val, int cp) {
+    attron(COLOR_PAIR(CP_UI));
+    mvprintw(y, x, "%-*s", (int)(w/2), label);
+    attroff(COLOR_PAIR(CP_UI));
+    attron(COLOR_PAIR(cp) | A_BOLD);
+    mvprintw(y, x + w/2, "%s", val);
+    attroff(COLOR_PAIR(cp) | A_BOLD);
+}
+
+static void inv_flag(int *row, int x, const char *text, int cp) {
+    attron(COLOR_PAIR(cp));
+    mvprintw((*row)++, x, "  + %s", text);
+    attroff(COLOR_PAIR(cp));
+}
+
 void render_inventory(int *sel) {
     Player *p = &G.player;
+
     while (1) {
         clear();
         getmaxyx(stdscr, G.th, G.tw);
-        int cx = 4;
 
+        /* Layout: left list panel | right detail panel */
+        int list_w  = 26;
+        int sep_x   = list_w;
+        int det_x   = sep_x + 2;
+        int det_w   = G.tw - det_x - 1;
+        if (det_w < 20) det_w = 20;
+
+        /* ── Header ── */
         attron(COLOR_PAIR(CP_UI) | A_BOLD);
-        mvprintw(0, cx, "INVENTORY");
+        mvprintw(0, 1, "INVENTORY");
         attroff(COLOR_PAIR(CP_UI) | A_BOLD);
 
+        /* ── Player stat summary bar ── */
+        attron(COLOR_PAIR(CP_DEF));
+        mvprintw(0, 12, "HP %d/%d", p->hp, p->max_hp);
+        mvprintw(0, 24, "ATK %d", p->atk);
+        mvprintw(0, 32, "DEF %d", p->def);
+        if (p->has_ranged)
+            mvprintw(0, 40, "SHOT %d  RNG %d", p->r_dmg, p->r_rng);
+        if (p->grenades > 0)
+            mvprintw(0, 58, "GRENADES %d", p->grenades);
+        attroff(COLOR_PAIR(CP_DEF));
+
+        /* Divider under header */
+        attron(COLOR_PAIR(CP_UI));
+        for (int x = 0; x < G.tw; x++) mvaddch(1, x, '-');
+        /* Vertical separator */
+        for (int y = 1; y < G.th - 2; y++) mvaddch(y, sep_x, '|');
+        attroff(COLOR_PAIR(CP_UI));
+
+        /* ── Left panel: item list ── */
+        int list_rows = G.th - 4;  /* rows available for list */
+        int scroll = 0;
+        if (*sel >= list_rows) scroll = *sel - list_rows + 1;
+
         if (p->n_items == 0) {
-            attron(COLOR_PAIR(CP_WALL));
-            mvprintw(2, cx, "You carry nothing.");
-            attroff(COLOR_PAIR(CP_WALL));
+            attron(COLOR_PAIR(CP_WALL) | A_DIM);
+            mvprintw(3, 1, "You carry nothing.");
+            attroff(COLOR_PAIR(CP_WALL) | A_DIM);
         }
 
         for (int i = 0; i < p->n_items; i++) {
+            int row = 2 + (i - scroll);
+            if (row < 2 || row >= G.th - 2) continue;
             ItemType it = p->items[i];
             if (it == IT_NONE) continue;
-            int row = 2 + i;
+            const ItemDef *d = &ITEMS[it];
+
             if (i == *sel) {
-                attron(COLOR_PAIR(CP_ITEM) | A_REVERSE | A_BOLD);
-                mvprintw_clip(row, cx, G.tw-cx-1, "  %s", ITEMS[it].name);
-                attroff(COLOR_PAIR(CP_ITEM) | A_REVERSE | A_BOLD);
+                attron(COLOR_PAIR(d->cp) | A_REVERSE | A_BOLD);
             } else {
-                attron(COLOR_PAIR(CP_DEF));
-                mvprintw_clip(row, cx, G.tw-cx-1, "  %s", ITEMS[it].name);
-                attroff(COLOR_PAIR(CP_DEF));
+                attron(COLOR_PAIR(d->cp));
             }
+            /* Symbol + name, clipped to list width */
+            char line[32];
+            snprintf(line, sizeof(line), " %c %-*s", d->sym, list_w - 4, d->name);
+            line[list_w - 1] = '\0';
+            mvprintw(row, 0, "%s", line);
+            attroff(COLOR_PAIR(d->cp) | A_REVERSE | A_BOLD);
         }
 
-        /* Description of selected */
+        /* Scroll indicator */
+        if (p->n_items > list_rows) {
+            attron(COLOR_PAIR(CP_UI) | A_DIM);
+            if (scroll > 0)
+                mvprintw(2, list_w - 2, "^");
+            if (scroll + list_rows < p->n_items)
+                mvprintw(G.th - 3, list_w - 2, "v");
+            attroff(COLOR_PAIR(CP_UI) | A_DIM);
+        }
+
+        /* ── Right panel: item detail ── */
         if (*sel < p->n_items && p->items[*sel] != IT_NONE) {
-            int dy = 3 + p->n_items + 1;
             const ItemDef *d = &ITEMS[p->items[*sel]];
-            attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
-            mvprintw_clip(dy, cx, G.tw-cx-1, "%s", d->name);
-            attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
-            attron(COLOR_PAIR(CP_FLOOR));
-            mvprintw_clip(dy+1, cx, G.tw-cx-1, "\"%s\"", d->desc);
-            if (d->consumable)
-                mvprintw_clip(dy+2, cx, G.tw-cx-1,
-                              "Charges: %d", p->charges[*sel]);
-            attroff(COLOR_PAIR(CP_FLOOR));
+            int dr = 2;
+
+            /* Item name */
+            attron(COLOR_PAIR(d->cp) | A_BOLD);
+            mvprintw_clip(dr++, det_x, det_w, "%c  %s", d->sym, d->name);
+            attroff(COLOR_PAIR(d->cp) | A_BOLD);
+            dr++;
+
+            /* Flavour description, word-wrapped roughly */
+            attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
+            char dbuf[128];
+            snprintf(dbuf, sizeof(dbuf), "\"%s\"", d->desc);
+            /* Naive wrap at det_w */
+            int dlen = (int)strlen(dbuf);
+            int pos = 0;
+            while (pos < dlen && dr < G.th - 8) {
+                int end = pos + det_w;
+                if (end >= dlen) end = dlen;
+                else {
+                    /* back up to last space */
+                    int e2 = end;
+                    while (e2 > pos && dbuf[e2] != ' ') e2--;
+                    if (e2 > pos) end = e2;
+                }
+                char tmp[128] = {0};
+                strncpy(tmp, dbuf + pos, (size_t)(end - pos));
+                mvprintw(dr++, det_x, "%s", tmp);
+                pos = end;
+                while (pos < dlen && dbuf[pos] == ' ') pos++;
+            }
+            attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
+            dr++;
+
+            /* ── Mechanical stats ── */
+            attron(COLOR_PAIR(CP_UI));
+            mvprintw(dr++, det_x, "Effects:");
+            attroff(COLOR_PAIR(CP_UI));
+
+            char buf[64];
+            if (d->max_hp > 0) {
+                snprintf(buf, sizeof(buf), "+%d max HP", d->max_hp);
+                inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            if (d->hp_heal > 0) {
+                snprintf(buf, sizeof(buf), "Heal %d HP on pickup", d->hp_heal);
+                inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            if (d->atk > 0) {
+                snprintf(buf, sizeof(buf), "+%d ATK", d->atk);
+                inv_flag(&dr, det_x, buf, CP_ITEM);
+            } else if (d->atk < 0) {
+                snprintf(buf, sizeof(buf), "%d ATK", d->atk);
+                inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            if (d->def > 0) {
+                snprintf(buf, sizeof(buf), "+%d DEF", d->def);
+                inv_flag(&dr, det_x, buf, CP_ITEM);
+            } else if (d->def < 0) {
+                snprintf(buf, sizeof(buf), "%d DEF", d->def);
+                inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            if (d->gives_ranged) {
+                if (d->r_ammo < 0)
+                    snprintf(buf, sizeof(buf), "Ranged: %d dmg, rng %d, inf ammo",
+                             d->r_dmg, d->r_rng);
+                else
+                    snprintf(buf, sizeof(buf), "Ranged: %d dmg, rng %d, %d ammo",
+                             d->r_dmg, d->r_rng, d->r_ammo);
+                inv_flag(&dr, det_x, buf, CP_ITEM);
+            }
+            if (d->regen)  {
+                snprintf(buf, sizeof(buf), "Regen %.2f HP/turn", d->regen_rate);
+                inv_flag(&dr, det_x, buf, CP_PLAYER);
+            }
+            if (d->instakill) {
+                snprintf(buf, sizeof(buf), "%.0f%% instakill (non-boss)", d->ik_ch * 100.0f);
+                inv_flag(&dr, det_x, buf, CP_MAGIC);
+            }
+            if (d->reflect) {
+                snprintf(buf, sizeof(buf), "%.0f%% damage reflect", d->rf_ch * 100.0f);
+                inv_flag(&dr, det_x, buf, CP_MAGIC);
+            }
+            if (d->bleed)
+                inv_flag(&dr, det_x, "Melee causes bleed (3 turns)", CP_BLOOD);
+            if (d->item_boost)
+                inv_flag(&dr, det_x, "All item effects +50%", CP_MAGIC);
+            if (d->extra_slots)
+                inv_flag(&dr, det_x, "Extra item slots", CP_ITEM);
+            if (p->items[*sel] == IT_HERETIC)
+                inv_flag(&dr, det_x, "Double ATK, double dmg received", CP_BOSS);
+            if (p->items[*sel] == IT_REMAINS)
+                inv_flag(&dr, det_x, p->death_save_used
+                         ? "Death save: SPENT" : "Survive one killing blow at 1 HP",
+                         p->death_save_used ? CP_WALL : CP_MAGIC);
+            if (p->items[*sel] == IT_LOSTDAYS)
+                inv_flag(&dr, det_x, "Enemies miss 20% of attacks", CP_MAGIC);
+            if (p->items[*sel] == IT_LANTERN)
+                inv_flag(&dr, det_x, "Adjacent enemies take 1 dmg/turn", CP_ITEM);
+            if (d->consumable) {
+                snprintf(buf, sizeof(buf), "Charges remaining: %d", p->grenades);
+                inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            /* stone synergy hint */
+            if (p->items[*sel] == IT_RSTONE || p->items[*sel] == IT_LSTONE) {
+                if (p->rstone && p->lstone)
+                    inv_flag(&dr, det_x, "SYNERGY ACTIVE: +5 ATK +5 DEF +10 HP", CP_MAGIC);
+                else
+                    inv_flag(&dr, det_x, "Synergy: find the other Stone", CP_WALL);
+            }
+
+            /* stat totals reminder at bottom of detail panel */
+            int br = G.th - 5;
+            if (br > dr + 1) {
+                attron(COLOR_PAIR(CP_UI));
+                for (int x = det_x; x < G.tw - 1; x++) mvaddch(br, x, '-');
+                attroff(COLOR_PAIR(CP_UI));
+                br++;
+                char totals[128];
+                snprintf(totals, sizeof(totals),
+                         "Totals  ATK %d  DEF %d  HP %d/%d",
+                         p->atk, p->def, p->hp, p->max_hp);
+                inv_stat(br, det_x, det_w, totals, "", CP_DEF);
+            }
+        } else if (p->n_items == 0) {
+            attron(COLOR_PAIR(CP_WALL) | A_DIM);
+            mvprintw(4, det_x, "No items carried.");
+            mvprintw(5, det_x, "Find item rooms and boss drops");
+            mvprintw(6, det_x, "to fill your pockets.");
+            attroff(COLOR_PAIR(CP_WALL) | A_DIM);
         }
 
+        /* ── Footer ── */
+        attron(COLOR_PAIR(CP_UI));
+        for (int x = 0; x < G.tw; x++) mvaddch(G.th-2, x, '-');
+        attroff(COLOR_PAIR(CP_UI));
         attron(COLOR_PAIR(CP_UI) | A_DIM);
-        mvprintw(G.th-2, cx, "[up/down] browse   [i/Esc] close");
+        mvprintw(G.th-1, 1, "[k/up] [j/down] scroll   [i/Esc] close");
         attroff(COLOR_PAIR(CP_UI) | A_DIM);
 
         refresh();
         int ch = getch();
         switch (ch) {
-            case KEY_UP:   case 'k': if (*sel > 0) (*sel)--; break;
-            case KEY_DOWN: case 'j': if (*sel < p->n_items-1) (*sel)++; break;
+            case KEY_UP:   case 'k':
+                if (*sel > 0) (*sel)--;
+                break;
+            case KEY_DOWN: case 'j':
+                if (*sel < p->n_items - 1) (*sel)++;
+                break;
             case 'i': case 27: return;
             case 'q': G.running = false; return;
         }
