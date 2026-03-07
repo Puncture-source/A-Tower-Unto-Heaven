@@ -96,6 +96,7 @@ typedef struct {
     int  hp_heal;
     int  atk;
     int  def;
+    int  spd;           /* speed modifier: +1 fast, -1 slow */
     bool gives_ranged;
     int  r_dmg;
     int  r_rng;
@@ -240,6 +241,7 @@ typedef struct {
     bool     death_save_used;
     bool     item_boost;    /* Tome of Kings */
     bool     lost_days;     /* 20% enemy miss */
+    int      spd;           /* speed: +N = N bonus moves, -N = N extra enemy turns */
     int      max_items;     /* derived: BASE_SLOTS + extra_slots from items */
     bool     rstone;
     bool     lstone;

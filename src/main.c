@@ -4,7 +4,7 @@
 Game G;
 
 /* ─── Input: shoot mode ─────────────────────────────────────────────── */
-static void handle_shoot_mode(void) {
+static bool handle_shoot_mode(void) {
     log_msg("Shoot direction? [hjkl/arrows]");
     render_game();
     int ch = getch();
@@ -18,9 +18,9 @@ static void handle_shoot_mode(void) {
         case 'u': dx= 1; dy=-1; break;
         case 'b': dx=-1; dy= 1; break;
         case 'n': dx= 1; dy= 1; break;
-        default: log_msg("Cancelled."); return;
+        default: log_msg("Cancelled."); return false;
     }
-    player_shoot(dx, dy);
+    return player_shoot(dx, dy);
 }
 
 /* ─── One turn ──────────────────────────────────────────────────────── */
@@ -42,7 +42,7 @@ static bool handle_input(int ch) {
             return true;
 
         /* Shoot */
-        case 'f': handle_shoot_mode(); return false; /* turn counted in shoot */
+        case 'f': return handle_shoot_mode();
 
         /* Grenade */
         case 'e': player_use_grenade(); return false;
@@ -97,7 +97,19 @@ static void game_loop(void) {
         bool turned = handle_input(ch);
 
         if (turned) {
-            update_enemies();
+            /* Fast player: extra moves before enemies act */
+            int bonus = G.player.spd;
+            while (bonus > 0 && G.running && !G.game_over) {
+                render_game();
+                ch = getch();
+                if (handle_input(ch)) bonus--;
+            }
+
+            /* Enemies act; slow player gives them extra turns */
+            int enemy_turns = 1 + (G.player.spd < 0 ? -G.player.spd : 0);
+            for (int t = 0; t < enemy_turns && !G.game_over; t++)
+                update_enemies();
+
             do_regen();
             do_lantern();
             check_room_clear();

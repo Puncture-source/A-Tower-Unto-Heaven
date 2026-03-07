@@ -78,20 +78,29 @@ static void draw_ui(void) {
 
     /* HP */
     attron(COLOR_PAIR(CP_DANGER));
-    mvprintw_clip(row++, px, UI_W-2, "HP %3d/%-3d", p->hp, p->max_hp);
+    mvprintw_clip(row++, px, UI_W-2, "Flesh %3d/%-3d", p->hp, p->max_hp);
     attroff(COLOR_PAIR(CP_DANGER));
     draw_hp_bar(row++, px, UI_W-2, p->hp, p->max_hp);
 
     /* Stats */
     attron(COLOR_PAIR(CP_DEF));
-    mvprintw_clip(row++, px, UI_W-2, "ATK %-2d  DEF %-2d", p->atk, p->def);
+    mvprintw_clip(row++, px, UI_W-2, "Tem %-2d  Res %-2d", p->atk, p->def);
+    if (p->spd != 0) {
+        int cp = p->spd > 0 ? CP_PLAYER : CP_DANGER;
+        attroff(COLOR_PAIR(CP_DEF));
+        attron(COLOR_PAIR(cp));
+        mvprintw_clip(row++, px, UI_W-2, "Gait %+d (%s)",
+                      p->spd, p->spd > 0 ? "SWIFT" : "SLUGGISH");
+        attroff(COLOR_PAIR(cp));
+        attron(COLOR_PAIR(CP_DEF));
+    }
     if (p->has_ranged)
-        mvprintw_clip(row++, px, UI_W-2, "SHOT %-2d  RNG %-2d",
+        mvprintw_clip(row++, px, UI_W-2, "Edge %-2d  Arc %-2d",
                       p->r_dmg, p->r_rng);
     if (p->r_ammo > 0)
-        mvprintw_clip(row++, px, UI_W-2, "AMMO %-3d", p->r_ammo);
+        mvprintw_clip(row++, px, UI_W-2, "Rounds %-3d", p->r_ammo);
     else if (p->has_ranged && p->r_ammo < 0)
-        mvprintw_clip(row++, px, UI_W-2, "AMMO  inf");
+        mvprintw_clip(row++, px, UI_W-2, "Rounds  inf");
     if (p->grenades > 0)
         mvprintw_clip(row++, px, UI_W-2, "GRENADES %-2d", p->grenades);
     attroff(COLOR_PAIR(CP_DEF));
@@ -99,7 +108,7 @@ static void draw_ui(void) {
 
     /* Floor / kills */
     attron(COLOR_PAIR(CP_UI));
-    mvprintw_clip(row++, px, UI_W-2, "Floor %d/%-d  Kills %-3d",
+    mvprintw_clip(row++, px, UI_W-2, "Ascent %d/%-d  Sin %-3d",
                   p->floor_num+1, NUM_FLOORS, p->kills);
     attroff(COLOR_PAIR(CP_UI));
     row++;
@@ -437,7 +446,7 @@ int render_char_select(void) {
         /* Description box */
         int desc_y = 3 + CH_COUNT * 2 + 1;
         attron(COLOR_PAIR(CP_ITEM));
-        mvprintw(desc_y, cx, "HP:%-3d ATK:%-2d DEF:%-2d",
+        mvprintw(desc_y, cx, "Flesh:%-3d Tem:%-2d Res:%-2d",
                  CHARS[sel].hp, CHARS[sel].atk, CHARS[sel].def);
         attroff(COLOR_PAIR(CP_ITEM));
         attron(COLOR_PAIR(CP_DEF));
@@ -492,7 +501,7 @@ void render_game_over(void) {
     attroff(COLOR_PAIR(CP_WALL) | A_DIM);
 
     attron(COLOR_PAIR(CP_DEF));
-    mvprintw(cy+4, cx, "Floor reached: %d   Kills: %d   Turns: %d",
+    mvprintw(cy+4, cx, "Ascent: %d   Sin: %d   Turns: %d",
              G.player.floor_num+1, G.player.kills, G.player.turn);
     attroff(COLOR_PAIR(CP_DEF));
 
@@ -552,7 +561,7 @@ void render_win(void) {
     attroff(COLOR_PAIR(CP_ITEM));
 
     attron(COLOR_PAIR(CP_DEF));
-    mvprintw(row+1, cx, "Kills: %d   Turns: %d", G.player.kills, G.player.turn);
+    mvprintw(row+1, cx, "Sin: %d   Turns: %d", G.player.kills, G.player.turn);
     attroff(COLOR_PAIR(CP_DEF));
 
     attron(COLOR_PAIR(CP_UI));
@@ -614,26 +623,26 @@ static const HelpEntry HELP_PAGES[][24] = {
         { "Lantern",     "Melting Lantern burns adj. enemies." },
         { NULL,          "" },
         { NULL,          "── DAMAGE ────────────────────────" },
-        { "Melee",       "ATK +/-1 - enemy DEF, min 1." },
-        { "Ranged",      "Shot DMG +/-1 - enemy DEF, min 1." },
+        { "Melee",       "Temerity +/-1 - enemy Resolve, min 1." },
+        { "Ranged",      "Edge +/-1 - enemy Resolve, min 1." },
         { "Grenade",     "~15 dmg to ALL enemies in room." },
         { NULL, NULL }
     },
     /* Page 2: Items */
     {
         { NULL,          "── NOTABLE ITEMS ─────────────────" },
-        { "Old Beans",   "+15 max HP, heals 10 HP on pickup." },
-        { "Sutures",     "Regenerate 1 HP every 4 turns." },
-        { "Occam's Razor","  +3 ATK." },
-        { "Holy Woad",   "+5 DEF." },
-        { "Bloody Hands","  +6 ATK but -3 DEF." },
+        { "Old Beans",   "+15 max Flesh, heals 10 on pickup." },
+        { "Sutures",     "Regenerate 1 Flesh every 4 turns." },
+        { "Occam's Razor","  +3 Temerity." },
+        { "Holy Woad",   "+5 Resolve." },
+        { "Bloody Hands","  +6 Temerity, -5 Resolve, regen." },
         { "Lost Days",   "Enemies have 20% chance to miss." },
         { "Crown/Teeth", "30% chance to reflect damage back." },
         { "Rust",        "Your melee causes bleed (3 turns)." },
-        { "What Remains","Survive one killing blow at 1 HP." },
-        { "Heretic's Heart","Double ATK, but double damage recv." },
+        { "What Remains","Survive one killing blow at 1 Flesh." },
+        { "Heretic's Heart","Double Temerity, double dmg recv." },
         { "The Professional","10% instakill (non-boss)." },
-        { "R+L Stones",  "Both together: +5 ATK +5 DEF +10HP." },
+        { "R+L Stones",  "Both: +5 Tem +5 Res +10 Flesh." },
         { "Tome of Kings","Items have enhanced effects (+50%)." },
         { "The Package", "Opens into 2 random items." },
         { "Nuclear Gospel","Gives ranged attack (3 dmg, rng 7)." },
@@ -642,26 +651,26 @@ static const HelpEntry HELP_PAGES[][24] = {
         { NULL,          "── STARTERS BY CHARACTER ─────────" },
         { "Jackal",      "9mm (ranged), Duffel bag." },
         { "Zealot",      "Tower Shield, Inscribed Axe, Shotgun." },
-        { "Ferdinand",   "Embedded Bullet (+25 HP), Tome." },
+        { "Ferdinand",   "Embedded Bullet (+25 Flesh), Tome." },
         { "Running Boy", "The Package (2 random items)." },
         { NULL, NULL }
     },
     /* Page 3: Enemies & Bosses */
     {
         { NULL,          "── ENEMIES ───────────────────────" },
-        { "o Organelle", "Slow, low HP. Abundant on floor 1." },
+        { "o Organelle", "Slow, low Flesh. Abundant on floor 1." },
         { "b Botfly",    "Fast (2 moves/turn). Swarms." },
         { "B Black Lung","Ranged: exhales filth, rng 8." },
         { "s Shade",     "Phases through walls. Relentless." },
-        { "r Plague Rat","Fast, medium HP." },
-        { "T Tithe-Taker","Tough, high DEF. Demands tribute." },
+        { "r Plague Rat","Fast, medium Flesh." },
+        { "T Tithe-Taker","Tough, high Resolve. Demands tribute." },
         { "C Censorite", "Very tough. Floor 2+." },
         { "d Drone",     "Fast, ranged. Floor 2+." },
         { NULL,          "" },
         { NULL,          "── BOSSES ────────────────────────" },
-        { "M Inside-Out-Man","Floor 1. 80 HP. Melee." },
-        { "K Ten-Knives","Floor 2. 140 HP. Throws knives." },
-        { "O The Throne","Floor 3. 220 HP. Ranged + summons." },
+        { "M Inside-Out-Man","Floor 1. 80 Flesh. Melee." },
+        { "K Ten-Knives","Floor 2. 140 Flesh. Throws knives." },
+        { "O The Throne","Floor 3. 220 Flesh. Ranged + summons." },
         { NULL,          "" },
         { NULL,          "── TIPS ──────────────────────────" },
         { "Kite ranged", "Lure ranged enemies around corners." },
@@ -967,9 +976,11 @@ void render_inventory(int *sel) {
 
         /* ── Player stat summary bar ── */
         attron(COLOR_PAIR(CP_DEF));
-        mvprintw(0, 12, "HP %d/%d", p->hp, p->max_hp);
-        mvprintw(0, 24, "ATK %d", p->atk);
-        mvprintw(0, 32, "DEF %d", p->def);
+        mvprintw(0, 12, "Flesh %d/%d", p->hp, p->max_hp);
+        mvprintw(0, 26, "Tem %d", p->atk);
+        mvprintw(0, 34, "Res %d", p->def);
+        if (p->spd != 0)
+            mvprintw(0, 42, "Gait %+d", p->spd);
         if (p->has_ranged)
             mvprintw(0, 40, "SHOT %d  RNG %d", p->r_dmg, p->r_rng);
         if (p->grenades > 0)
@@ -1071,21 +1082,29 @@ void render_inventory(int *sel) {
                 inv_flag(&dr, det_x, buf, CP_DANGER);
             }
             if (d->hp_heal > 0) {
-                snprintf(buf, sizeof(buf), "Heal %d HP on pickup", d->hp_heal);
+                snprintf(buf, sizeof(buf), "Heal %d Flesh on pickup", d->hp_heal);
                 inv_flag(&dr, det_x, buf, CP_DANGER);
             }
             if (d->atk > 0) {
-                snprintf(buf, sizeof(buf), "+%d ATK", d->atk);
+                snprintf(buf, sizeof(buf), "+%d Temerity", d->atk);
                 inv_flag(&dr, det_x, buf, CP_ITEM);
             } else if (d->atk < 0) {
-                snprintf(buf, sizeof(buf), "%d ATK", d->atk);
+                snprintf(buf, sizeof(buf), "%d Temerity", d->atk);
                 inv_flag(&dr, det_x, buf, CP_DANGER);
             }
             if (d->def > 0) {
-                snprintf(buf, sizeof(buf), "+%d DEF", d->def);
+                snprintf(buf, sizeof(buf), "+%d Resolve", d->def);
                 inv_flag(&dr, det_x, buf, CP_ITEM);
             } else if (d->def < 0) {
-                snprintf(buf, sizeof(buf), "%d DEF", d->def);
+                snprintf(buf, sizeof(buf), "%d Resolve", d->def);
+                inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            if (d->spd > 0) {
+                snprintf(buf, sizeof(buf), "+%d Gait (extra move%s)",
+                         d->spd, d->spd > 1 ? "s" : "");
+                inv_flag(&dr, det_x, buf, CP_PLAYER);
+            } else if (d->spd < 0) {
+                snprintf(buf, sizeof(buf), "%d Gait (sluggish)", d->spd);
                 inv_flag(&dr, det_x, buf, CP_DANGER);
             }
             if (d->gives_ranged) {
@@ -1098,7 +1117,7 @@ void render_inventory(int *sel) {
                 inv_flag(&dr, det_x, buf, CP_ITEM);
             }
             if (d->regen)  {
-                snprintf(buf, sizeof(buf), "Regen %.2f HP/turn", d->regen_rate);
+                snprintf(buf, sizeof(buf), "Regen %.2f Flesh/turn", d->regen_rate);
                 inv_flag(&dr, det_x, buf, CP_PLAYER);
             }
             if (d->instakill) {
@@ -1150,7 +1169,7 @@ void render_inventory(int *sel) {
                 br++;
                 char totals[128];
                 snprintf(totals, sizeof(totals),
-                         "Totals  ATK %d  DEF %d  HP %d/%d",
+                         "Totals  Tem %d  Res %d  Flesh %d/%d",
                          p->atk, p->def, p->hp, p->max_hp);
                 inv_stat(br, det_x, det_w, totals, "", CP_DEF);
             }

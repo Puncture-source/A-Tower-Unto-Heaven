@@ -31,7 +31,7 @@ const ItemDef ITEMS[IT_COUNT] = {
     [IT_BLOODY] = {
         .name="Bloody Hands",
         .desc="Survival comes at a cost.",
-        .atk=6, .def=-3,
+        .atk=6, .def=-5, .regen=true, .regen_rate=0.25f,
         .sym=',', .cp=CP_BLOOD
     },
     [IT_SNAIL] = {
@@ -299,6 +299,7 @@ void recalc_stats(void) {
 
     p->atk = p->base_atk;
     p->def = p->base_def;
+    p->spd          = 0;
     p->max_items    = BASE_SLOTS;
     p->has_ranged   = false;
     p->r_dmg = p->r_rng = p->r_ammo = 0;
@@ -321,6 +322,7 @@ void recalc_stats(void) {
 
         p->atk  += (int)(d->atk  * boost);
         p->def  += (int)(d->def  * boost);
+        p->spd  += d->spd;
         p->max_items += d->extra_slots;
         if (d->max_hp > 0)
             p->max_hp = p->max_hp; /* max_hp applied once at pickup */
