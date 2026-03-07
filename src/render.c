@@ -117,6 +117,50 @@ static void draw_ui(void) {
         mvprintw(row++, px, "%s", line);
     }
     attroff(COLOR_PAIR(CP_ITEM));
+
+    /* Room enemies */
+    Room *rm = cur_room();
+    int n_alive = 0;
+    for (int i = 0; i < rm->n_enemies; i++)
+        if (rm->enemies[i].alive) n_alive++;
+    if (n_alive > 0 && row < G.gh - 4) {
+        row++;
+        attron(COLOR_PAIR(CP_DANGER) | A_BOLD);
+        mvprintw_clip(row++, px, UI_W-2, "ENEMIES:");
+        attroff(COLOR_PAIR(CP_DANGER) | A_BOLD);
+        for (int i = 0; i < rm->n_enemies && row < G.gh - 2; i++) {
+            Enemy *e = &rm->enemies[i];
+            if (!e->alive) continue;
+            attron(e->boss ? COLOR_PAIR(CP_BOSS) | A_BOLD : COLOR_PAIR(CP_DANGER));
+            char line[UI_W+1];
+            snprintf(line, sizeof(line), " %-*s%d/%d",
+                     UI_W - 7, e->name, e->hp, e->max_hp);
+            line[UI_W-1] = '\0';
+            mvprintw(row++, px, "%s", line);
+            attroff(COLOR_PAIR(CP_DANGER) | COLOR_PAIR(CP_BOSS) | A_BOLD);
+        }
+    }
+
+    /* Room floor items */
+    int n_floor = 0;
+    for (int i = 0; i < rm->n_items; i++)
+        if (rm->items[i] != IT_NONE) n_floor++;
+    if (n_floor > 0 && row < G.gh - 4) {
+        row++;
+        attron(COLOR_PAIR(CP_MAGIC) | A_BOLD);
+        mvprintw_clip(row++, px, UI_W-2, "ON FLOOR:");
+        attroff(COLOR_PAIR(CP_MAGIC) | A_BOLD);
+        attron(COLOR_PAIR(CP_MAGIC));
+        for (int i = 0; i < rm->n_items && row < G.gh - 2; i++) {
+            if (rm->items[i] == IT_NONE) continue;
+            char line[UI_W+1];
+            snprintf(line, sizeof(line), " %s", ITEMS[rm->items[i]].name);
+            line[UI_W-1] = '\0';
+            mvprintw(row++, px, "%s", line);
+        }
+        attroff(COLOR_PAIR(CP_MAGIC));
+    }
+
     row++;
 
     /* Keybinds */
