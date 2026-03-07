@@ -106,7 +106,7 @@ static void draw_ui(void) {
 
     /* Items */
     attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
-    mvprintw_clip(row++, px, UI_W-2, "ITEMS:");
+    mvprintw_clip(row++, px, UI_W-2, "ITEMS %d/%d:", p->n_items, p->max_items);
     attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
     attron(COLOR_PAIR(CP_ITEM));
     for (int i = 0; i < p->n_items && row < G.gh - 6; i++) {
@@ -918,7 +918,7 @@ void render_inventory(int *sel) {
 
         /* ── Header ── */
         attron(COLOR_PAIR(CP_UI) | A_BOLD);
-        mvprintw(0, 1, "INVENTORY");
+        mvprintw(0, 1, "INVENTORY  %d/%d slots", p->n_items, p->max_items);
         attroff(COLOR_PAIR(CP_UI) | A_BOLD);
 
         /* ── Player stat summary bar ── */
@@ -1069,8 +1069,12 @@ void render_inventory(int *sel) {
                 inv_flag(&dr, det_x, "Melee causes bleed (3 turns)", CP_BLOOD);
             if (d->item_boost)
                 inv_flag(&dr, det_x, "All item effects +50%", CP_MAGIC);
-            if (d->extra_slots)
-                inv_flag(&dr, det_x, "Extra item slots", CP_ITEM);
+            if (d->extra_slots) {
+                char slotbuf[40];
+                snprintf(slotbuf, sizeof(slotbuf), "+%d item slots (total %d)",
+                         d->extra_slots, p->max_items);
+                inv_flag(&dr, det_x, slotbuf, CP_ITEM);
+            }
             if (p->items[*sel] == IT_HERETIC)
                 inv_flag(&dr, det_x, "Double ATK, double dmg received", CP_BOSS);
             if (p->items[*sel] == IT_REMAINS)

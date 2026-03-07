@@ -22,7 +22,8 @@
 #define RT_H        (MAX_ROOM_H + 2)
 #define MAX_ROOM_EN 10      /* enemies per room */
 #define MAX_ROOM_IT 3       /* item pickups per room */
-#define MAX_PLR_IT  24      /* player item slots */
+#define MAX_PLR_IT  24      /* hard array cap */
+#define BASE_SLOTS   6      /* default item slots */
 #define MAX_MSG     80
 #define MSG_LEN     120
 
@@ -109,7 +110,7 @@ typedef struct {
     bool consumable;
     int  charges;
     bool item_boost;    /* Tome of Kings effect */
-    bool extra_slots;   /* Duffel */
+    int  extra_slots;   /* Duffel: number of bonus item slots */
     char sym;
     int  cp;
 } ItemDef;
@@ -239,6 +240,7 @@ typedef struct {
     bool     death_save_used;
     bool     item_boost;    /* Tome of Kings */
     bool     lost_days;     /* 20% enemy miss */
+    int      max_items;     /* derived: BASE_SLOTS + extra_slots from items */
     bool     rstone;
     bool     lstone;
     int      grenades;

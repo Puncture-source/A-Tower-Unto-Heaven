@@ -26,6 +26,7 @@ void log_msg(const char *fmt, ...) {
 void init_player(CharType ct) {
     Player *p = &G.player;
     memset(p, 0, sizeof(Player));
+    p->max_items = MAX_PLR_IT; /* temporary; recalc_stats() will set final value */
     const CharDef *cd = &CHARS[ct];
     p->chr       = ct;
     p->hp        = cd->hp;
@@ -371,9 +372,15 @@ bool player_move(int dx, int dy) {
     p->x = nx;
     p->y = ny;
 
-    /* Pick up item if standing on it */
+    /* Notify player when standing on an item */
     if (tile == T_ITEM) {
-        pick_up_items();
+        Room *cr = cur_room();
+        for (int i = 0; i < cr->n_items; i++) {
+            if (cr->items[i] != IT_NONE && cr->ix[i] == nx && cr->iy[i] == ny) {
+                log_msg("You see: %s  [g] to pick up", ITEMS[cr->items[i]].name);
+                break;
+            }
+        }
     }
 
     p->turn++;
@@ -465,12 +472,10 @@ void player_use_grenade(void) {
 void pick_up_items(void) {
     Player *p = &G.player;
     Room *r = cur_room();
-    int max_slots = MAX_PLR_IT;
-
     for (int i = 0; i < r->n_items; i++) {
         if (r->items[i] == IT_NONE) continue;
         if (r->ix[i] != p->x || r->iy[i] != p->y) continue;
-        if (p->n_items >= max_slots) {
+        if (p->n_items >= p->max_items) {
             log_msg("Your hands are full. Drop something first.");
             continue;
         }

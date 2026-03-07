@@ -127,8 +127,8 @@ const ItemDef ITEMS[IT_COUNT] = {
     },
     [IT_DUFFEL] = {
         .name="Duffel Bag",
-        .desc="Extra capacity for the long climb.",
-        .extra_slots=true,
+        .desc="Extra capacity for the long climb. +6 item slots.",
+        .extra_slots=6,
         .sym='D', .cp=CP_ITEM
     },
     [IT_T_SHIELD] = {
@@ -260,7 +260,7 @@ void apply_item(ItemType it, int slot) {
             bool dup = false;
             for (int j = 0; j < p->n_items; j++)
                 if (p->items[j] == gift) { dup = true; break; }
-            if (!dup && p->n_items < MAX_PLR_IT) {
+            if (!dup && p->n_items < p->max_items) {
                 p->items[p->n_items] = gift;
                 p->charges[p->n_items] = ITEMS[gift].charges;
                 p->n_items++;
@@ -299,6 +299,7 @@ void recalc_stats(void) {
 
     p->atk = p->base_atk;
     p->def = p->base_def;
+    p->max_items    = BASE_SLOTS;
     p->has_ranged   = false;
     p->r_dmg = p->r_rng = p->r_ammo = 0;
     p->regen_acc     = p->regen_acc; /* keep accumulator */
@@ -320,6 +321,7 @@ void recalc_stats(void) {
 
         p->atk  += (int)(d->atk  * boost);
         p->def  += (int)(d->def  * boost);
+        p->max_items += d->extra_slots;
         if (d->max_hp > 0)
             p->max_hp = p->max_hp; /* max_hp applied once at pickup */
 
@@ -356,6 +358,7 @@ void recalc_stats(void) {
     /* Clamp */
     if (p->atk < 1) p->atk = 1;
     if (p->def < 0) p->def = 0;
+    if (p->max_items > MAX_PLR_IT) p->max_items = MAX_PLR_IT;
 
     /* Regen stored as accumulated rate */
     (void)regen_sum; /* regen_acc ticked in do_regen() per-item */
