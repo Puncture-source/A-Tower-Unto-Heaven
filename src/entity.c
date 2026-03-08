@@ -569,6 +569,49 @@ static bool tile_passable(Room *r, int x, int y, bool phase) {
     return (t == T_FLOOR || t == T_DOOR_OPEN || t == T_ITEM || t == T_STAIRS);
 }
 
+/* ─── BFS pathfinding ────────────────────────────────────────────────── *
+ * Returns the direction index (0-3) of the first step from (sx,sy) toward
+ * (gx,gy) navigating around walls, or -1 if no path exists.
+ * Uses the room tile grid; phasing enemies ignore walls.
+ */
+static int bfs_step(Room *r, int sx, int sy, int gx, int gy, bool phase) {
+    if (sx == gx && sy == gy) return -1;
+
+    /* from[y][x] = direction we travelled to reach (x,y); 4 = start, -1 = unseen */
+    int8_t from[RT_H][RT_W];
+    memset(from, -1, sizeof(from));
+    from[sy][sx] = 4;
+
+    int queue[RT_H * RT_W];
+    int head = 0, tail = 0;
+    queue[tail++] = sy * RT_W + sx;
+
+    while (head < tail) {
+        int cell = queue[head++];
+        int cx = cell % RT_W, cy = cell / RT_W;
+        for (int d = 0; d < 4; d++) {
+            int nx = cx + DX[d], ny = cy + DY[d];
+            if (nx < 0 || ny < 0 || nx >= RT_W || ny >= RT_H) continue;
+            if (from[ny][nx] != -1) continue;
+            if (!tile_passable(r, nx, ny, phase)) continue;
+            from[ny][nx] = (int8_t)d;
+            if (nx == gx && ny == gy) goto found;
+            queue[tail++] = ny * RT_W + nx;
+        }
+    }
+    return -1; /* no path */
+
+found:;
+    /* Trace back from goal to find first step */
+    int x = gx, y = gy, first = -1;
+    while (x != sx || y != sy) {
+        first = from[y][x];
+        x -= DX[first];
+        y -= DY[first];
+    }
+    return first;
+}
+
 static bool pos_has_enemy(Room *r, int x, int y) {
     for (int i = 0; i < r->n_enemies; i++) {
         Enemy *e = &r->enemies[i];
@@ -691,33 +734,16 @@ void update_enemies(void) {
                 continue;
             }
 
-            /* Move toward player (greedy pathfinding) */
-            int bdx = (p->x > e->x) - (p->x < e->x);
-            int bdy = (p->y > e->y) - (p->y < e->y);
-            int nx, ny;
-            bool moved = false;
-
-            /* Try X first */
-            if (bdx != 0) {
-                nx = e->x + bdx; ny = e->y;
-                if (tile_passable(r, nx, ny, e->phasing) && !pos_has_enemy(r, nx, ny)
-                    && !(nx == p->x && ny == p->y)) {
-                    e->x = nx; e->y = ny; moved = true;
-                }
-            }
-            if (!moved && bdy != 0) {
-                nx = e->x; ny = e->y + bdy;
-                if (tile_passable(r, nx, ny, e->phasing) && !pos_has_enemy(r, nx, ny)
-                    && !(nx == p->x && ny == p->y)) {
-                    e->x = nx; e->y = ny; moved = true;
-                }
-            }
-            /* Try Y first if X failed */
-            if (!moved && bdy != 0) {
-                nx = e->x; ny = e->y + bdy;
-                if (tile_passable(r, nx, ny, e->phasing) && !pos_has_enemy(r, nx, ny)
-                    && !(nx == p->x && ny == p->y)) {
-                    e->x = nx; e->y = ny;
+            /* BFS toward player */
+            {
+                int step = bfs_step(r, e->x, e->y, p->x, p->y, e->phasing);
+                if (step >= 0) {
+                    int nx = e->x + DX[step], ny = e->y + DY[step];
+                    if (!(nx == p->x && ny == p->y) &&
+                        tile_passable(r, nx, ny, e->phasing) &&
+                        !pos_has_enemy(r, nx, ny)) {
+                        e->x = nx; e->y = ny;
+                    }
                 }
             }
 
