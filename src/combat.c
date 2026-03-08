@@ -111,10 +111,10 @@ static int do_resolve_verb(Enemy *e, Verb v, FuelType fuel, bool *hunger_fed) {
                 break;
             }
             switch (fuel) {
-                case FUEL_GLIMMER: tension_dmg = 2; break;
-                case FUEL_MEMORY:  tension_dmg = 3; break;
-                case FUEL_ASH:     tension_dmg = 1; p->ash += 5; if (p->ash>100) p->ash=100; break;
-                case FUEL_FLESH:   tension_dmg = 1; break;
+                case FUEL_GLIMMER: tension_dmg = 3; break;
+                case FUEL_MEMORY:  tension_dmg = 4; break;
+                case FUEL_ASH:     tension_dmg = 2; p->ash += 5; if (p->ash>100) p->ash=100; break;
+                case FUEL_FLESH:   tension_dmg = 2; break;
                 case FUEL_ITEM:    tension_dmg = 2; break;
                 case FUEL_TURNS:   tension_dmg = 1; break;
                 default: break;
@@ -165,12 +165,14 @@ static int do_resolve_verb(Enemy *e, Verb v, FuelType fuel, bool *hunger_fed) {
         case VERB_MEND:
             switch (fuel) {
                 case FUEL_GLIMMER: { int h=roll(1,6); p->hp+=h; log_msg("MEND: +%d Flesh.",h); break; }
-                case FUEL_MEMORY:  { int h=roll(3,8); p->hp+=h; log_msg("MEND: +%d Flesh (deep).",h); break; }
+                case FUEL_MEMORY:  { int h=roll(6,12); p->hp+=h; log_msg("MEND: +%d Flesh (deep).",h); break; }
                 case FUEL_ASH:     p->ash-=20; if(p->ash<0)p->ash=0; p->hp+=5; log_msg("MEND: Ash -20, +5 Flesh."); break;
                 case FUEL_FLESH:   p->ash-=10; if(p->ash<0)p->ash=0; log_msg("MEND: traded Flesh for clarity."); break;
                 default:           p->hp+=2; log_msg("MEND: +2 Flesh."); break;
             }
             if (p->hp > p->max_hp) p->hp = p->max_hp;
+            /* Husk: MEND deals 1 tension to prevent STONE softlock */
+            if (p->husk) { tension_dmg = 1; log_msg("The MEND finds a crack. Tension -1."); }
             if (is_judgement) { p->ash+=3; if(p->ash>100)p->ash=100; log_msg("JUDGEMENT: Ash +3."); }
             break;
 
@@ -216,7 +218,7 @@ static int do_resolve_verb(Enemy *e, Verb v, FuelType fuel, bool *hunger_fed) {
             int chance = 70 - (p->ash / 33) * 20;
             if (chance < 10) chance = 10;
             if ((rand() % 100) < chance) {
-                tension_dmg = 1 + (is_echo ? 1 : 0);
+                tension_dmg = 2 + (is_echo ? 1 : 0);
                 log_msg("Reality reshapes. Tension -%d.", tension_dmg);
             } else {
                 p->ash += 8;
@@ -282,9 +284,10 @@ static void fire_threshold_event(Enemy *e) {
             }
             break;
         case EN_TENKNIVES:
-            log_msg("Ten Knives — phase 2.");
+            log_msg("Ten Knives — phase 2. The blades begin to echo.");
             e->phase = 2;
             e->tension = e->max_tension;
+            if (e->n_aspects < 4) e->aspects[e->n_aspects++] = ASP_ECHO;
             break;
         case EN_THRONE:
             log_msg("The Throne summons its servants.");
@@ -454,8 +457,14 @@ void enter_combat_panel(Enemy *e) {
                     chosen_fuel = FUEL_COUNT;
                 }
             }
-            if (cancelled) { ac--; if (ac < 0) ac = 0; continue; }
+            if (cancelled) { ac--; continue; }
             if (G.game_over) break;
+
+            /* ── Pre-resolve guard: FORGET with no aspects wastes fuel ── */
+            if (chosen_verb == VERB_FORGET && e->n_aspects == 0) {
+                log_msg("There is nothing left to erase.");
+                ac--; continue;
+            }
 
             /* ── Resolve ── */
             consume_fuel(chosen_fuel);
