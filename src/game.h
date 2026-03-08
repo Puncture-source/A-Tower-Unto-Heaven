@@ -184,6 +184,8 @@ typedef struct {
     bool is_alcove;     /* dead-end pocket, no enemies */
     bool has_stairs;
     int  map_x, map_y;  /* minimap grid position (set by BFS after generation) */
+    int  wx, wy;        /* world tile offset for continuous rendering */
+    bool seen[RT_H][RT_W]; /* tiles revealed by FOV (persists) */
     Enemy    enemies[MAX_ROOM_EN];
     int      n_enemies;
     ItemType items[MAX_ROOM_IT];

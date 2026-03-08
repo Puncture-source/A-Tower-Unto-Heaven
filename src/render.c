@@ -215,127 +215,150 @@ static void draw_messages(void) {
 
 /* ─── Room rendering ────────────────────────────────────────────────── */
 static void draw_room(void) {
-    Room *r = cur_room();
-    Player *p = &G.player;
+    Player *p  = &G.player;
+    Floor  *fl = G.cf;
+    Room   *cr = cur_room();
 
-    /* Center room in game area */
-    int rw = r->w + 2, rh = r->h + 2;
-    int ox = (G.gw - rw) / 2;
-    int oy = (G.gh - rh) / 2;
-    if (ox < 0) ox = 0;
-    if (oy < 0) oy = 0;
+    /* Player's world position */
+    int pwx = cr->wx + p->x;
+    int pwy = cr->wy + p->y;
 
-    /* Tiles */
+    /* Viewport top-left in world coords (player is centred on screen) */
+    int vx = pwx - G.gw / 2;
+    int vy = pwy - G.gh / 2;
+
     int fov2 = FOV_RADIUS * FOV_RADIUS;
-    for (int ty = 0; ty < rh && ty < RT_H; ty++) {
-        for (int tx = 0; tx < rw && tx < RT_W; tx++) {
-            int sx = ox + tx;
-            int sy = oy + ty;
-            if (sx >= G.gw || sy >= G.gh) continue;
-            TileType t = r->tiles[ty][tx];
-            int ddx = tx - p->x, ddy = ty - p->y;
-            bool in_fov = (ddx*ddx + ddy*ddy) <= fov2;
 
-            if (in_fov) {
-                /* Full rendering */
-                switch (t) {
-                    case T_WALL:
-                        attron(COLOR_PAIR(CP_WALL));
-                        mvaddch(sy, sx, '#');
-                        attroff(COLOR_PAIR(CP_WALL));
-                        break;
-                    case T_FLOOR:
-                        attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
-                        mvaddch(sy, sx, '.');
-                        attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
-                        break;
-                    case T_DOOR_OPEN:
-                        attron(COLOR_PAIR(CP_ITEM));
-                        mvaddch(sy, sx, '+');
-                        attroff(COLOR_PAIR(CP_ITEM));
-                        break;
-                    case T_DOOR_LOCK:
-                        attron(COLOR_PAIR(CP_DANGER));
-                        mvaddch(sy, sx, '=');
-                        attroff(COLOR_PAIR(CP_DANGER));
-                        break;
-                    case T_STAIRS:
-                        attron(COLOR_PAIR(CP_UI) | A_BOLD);
-                        mvaddch(sy, sx, '>');
-                        attroff(COLOR_PAIR(CP_UI) | A_BOLD);
-                        break;
-                    case T_ITEM:
-                        attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
-                        mvaddch(sy, sx, '?');
-                        attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
-                        break;
-                    default:
-                        break;
+    /* ── Tiles (all rooms) ── */
+    for (int ri = 0; ri < fl->n_rooms; ri++) {
+        Room *r = &fl->rooms[ri];
+        int rw_full = r->w + 2, rh_full = r->h + 2;
+
+        for (int ty = 0; ty < rh_full && ty < RT_H; ty++) {
+            for (int tx = 0; tx < rw_full && tx < RT_W; tx++) {
+                int wx = r->wx + tx;
+                int wy = r->wy + ty;
+                int sx = wx - vx;
+                int sy = wy - vy;
+                if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
+
+                TileType t = r->tiles[ty][tx];
+                if (t == T_VOID) continue;
+
+                int ddx = wx - pwx, ddy = wy - pwy;
+                bool in_fov = (ddx*ddx + ddy*ddy) <= fov2;
+
+                if (in_fov) {
+                    r->seen[ty][tx] = true; /* permanently reveal this tile */
+                    switch (t) {
+                        case T_WALL:
+                            attron(COLOR_PAIR(CP_WALL));
+                            mvaddch(sy, sx, '#');
+                            attroff(COLOR_PAIR(CP_WALL));
+                            break;
+                        case T_FLOOR:
+                            attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
+                            mvaddch(sy, sx, '.');
+                            attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
+                            break;
+                        case T_DOOR_OPEN:
+                            attron(COLOR_PAIR(CP_ITEM));
+                            mvaddch(sy, sx, '+');
+                            attroff(COLOR_PAIR(CP_ITEM));
+                            break;
+                        case T_DOOR_LOCK:
+                            attron(COLOR_PAIR(CP_DANGER));
+                            mvaddch(sy, sx, '=');
+                            attroff(COLOR_PAIR(CP_DANGER));
+                            break;
+                        case T_STAIRS:
+                            attron(COLOR_PAIR(CP_UI) | A_BOLD);
+                            mvaddch(sy, sx, '>');
+                            attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+                            break;
+                        case T_ITEM:
+                            attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
+                            mvaddch(sy, sx, '?');
+                            attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
+                            break;
+                        default:
+                            break;
+                    }
+                } else if (r->seen[ty][tx]) {
+                    /* Previously seen but not currently visible: dim outline */
+                    switch (t) {
+                        case T_WALL:
+                            attron(COLOR_PAIR(CP_WALL) | A_DIM);
+                            mvaddch(sy, sx, '#');
+                            attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+                            break;
+                        case T_FLOOR:
+                            attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
+                            mvaddch(sy, sx, '.');
+                            attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
+                            break;
+                        case T_DOOR_OPEN:
+                            attron(COLOR_PAIR(CP_DEF) | A_DIM);
+                            mvaddch(sy, sx, '+');
+                            attroff(COLOR_PAIR(CP_DEF) | A_DIM);
+                            break;
+                        case T_DOOR_LOCK:
+                            attron(COLOR_PAIR(CP_DEF) | A_DIM);
+                            mvaddch(sy, sx, '=');
+                            attroff(COLOR_PAIR(CP_DEF) | A_DIM);
+                            break;
+                        default:
+                            break;
+                    }
+                    /* items/stairs/enemies hidden in remembered tiles */
                 }
-            } else {
-                /* Out of sight: show wall/door structure only, dimly */
-                switch (t) {
-                    case T_WALL:
-                        attron(COLOR_PAIR(CP_WALL) | A_DIM);
-                        mvaddch(sy, sx, '#');
-                        attroff(COLOR_PAIR(CP_WALL) | A_DIM);
-                        break;
-                    case T_DOOR_OPEN:
-                        attron(COLOR_PAIR(CP_DEF) | A_DIM);
-                        mvaddch(sy, sx, '+');
-                        attroff(COLOR_PAIR(CP_DEF) | A_DIM);
-                        break;
-                    case T_DOOR_LOCK:
-                        attron(COLOR_PAIR(CP_DEF) | A_DIM);
-                        mvaddch(sy, sx, '=');
-                        attroff(COLOR_PAIR(CP_DEF) | A_DIM);
-                        break;
-                    default:
-                        break; /* floor, items, stairs: hidden in darkness */
-                }
+                /* else: never seen — render nothing (pure darkness) */
             }
         }
     }
 
-    /* Enemies (only within FOV) */
-    for (int i = 0; i < r->n_enemies; i++) {
-        Enemy *e = &r->enemies[i];
-        if (!e->alive) continue;
-        int edx = e->x - p->x, edy = e->y - p->y;
-        if (edx*edx + edy*edy > fov2) continue;
-        int sx = ox + e->x, sy = oy + e->y;
-        if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
-        attr_t attr = COLOR_PAIR(e->cp);
-        if (e->boss) attr |= A_BOLD;
-        attron(attr);
-        mvaddch(sy, sx, e->sym);
-        attroff(attr);
-    }
-
-    /* Player */
-    {
-        int sx = ox + p->x, sy = oy + p->y;
-        if (sx >= 0 && sy >= 0 && sx < G.gw && sy < G.gh) {
-            attron(COLOR_PAIR(CHARS[p->chr].cp) | A_BOLD);
-            mvaddch(sy, sx, CHARS[p->chr].sym);
-            attroff(COLOR_PAIR(CHARS[p->chr].cp) | A_BOLD);
+    /* ── Enemies (all rooms, FOV-filtered) ── */
+    for (int ri = 0; ri < fl->n_rooms; ri++) {
+        Room *r = &fl->rooms[ri];
+        for (int i = 0; i < r->n_enemies; i++) {
+            Enemy *e = &r->enemies[i];
+            if (!e->alive) continue;
+            int ewx = r->wx + e->x, ewy = r->wy + e->y;
+            int ddx = ewx - pwx, ddy = ewy - pwy;
+            if (ddx*ddx + ddy*ddy > fov2) continue;
+            int sx = ewx - vx, sy = ewy - vy;
+            if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
+            attr_t attr = COLOR_PAIR(e->cp);
+            if (e->boss) attr |= A_BOLD;
+            attron(attr);
+            mvaddch(sy, sx, e->sym);
+            attroff(attr);
         }
     }
 
-    /* Projectiles */
+    /* ── Player (always screen-centre) ── */
+    {
+        int sx = G.gw / 2, sy = G.gh / 2;
+        attron(COLOR_PAIR(CHARS[p->chr].cp) | A_BOLD);
+        mvaddch(sy, sx, CHARS[p->chr].sym);
+        attroff(COLOR_PAIR(CHARS[p->chr].cp) | A_BOLD);
+    }
+
+    /* ── Projectiles ── */
     for (int i = 0; i < MAX_PROJ; i++) {
         Proj *pr = &G.projs[i];
         if (!pr->active) continue;
-        int sx = ox + pr->x, sy = oy + pr->y;
+        int sx = (cr->wx + pr->x) - vx;
+        int sy = (cr->wy + pr->y) - vy;
         if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
         attron(COLOR_PAIR(pr->cp) | A_BOLD);
         mvaddch(sy, sx, pr->sym);
         attroff(COLOR_PAIR(pr->cp) | A_BOLD);
     }
 
-    /* Boss HP bar (if boss in room) */
-    for (int i = 0; i < r->n_enemies; i++) {
-        Enemy *e = &r->enemies[i];
+    /* ── Boss HP bar (if boss in current room) ── */
+    for (int i = 0; i < cr->n_enemies; i++) {
+        Enemy *e = &cr->enemies[i];
         if (!e->alive || !e->boss) continue;
         int bw = G.gw - 4;
         if (bw < 4) bw = 4;
