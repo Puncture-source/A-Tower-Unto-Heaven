@@ -225,8 +225,36 @@ void spawn_boss(Room *r, int floor_num) {
     log_msg(""); /* spacer */
 }
 
+/* ─── Knockback ──────────────────────────────────────────────────────── */
+static bool pos_has_enemy(Room *r, int x, int y); /* forward decl */
+static void apply_knockback(Enemy *e, int dx, int dy, int tiles) {
+    Room *r = cur_room();
+    for (int i = 0; i < tiles; i++) {
+        int nx = e->x + dx;
+        int ny = e->y + dy;
+        if (nx < 0 || ny < 0 || nx >= RT_W || ny >= RT_H) break;
+        TileType t = r->tiles[ny][nx];
+        if (t == T_WALL || t == T_DOOR_LOCK || t == T_VOID) {
+            /* Wall slam: bonus damage */
+            int bonus = tiles;
+            e->hp -= bonus;
+            log_msg("The %s slams into the wall! (%d bonus damage)", e->name, bonus);
+            if (e->hp <= 0) {
+                e->alive = false;
+                G.player.kills++;
+                log_msg("%s", e->die_msg);
+                check_room_clear();
+            }
+            break;
+        }
+        if (pos_has_enemy(r, nx, ny)) break; /* stop before occupied tile */
+        e->x = nx;
+        e->y = ny;
+    }
+}
+
 /* ─── Combat: player attacks enemy ──────────────────────────────────── */
-static void player_attack_enemy(Enemy *e) {
+static void player_attack_enemy(Enemy *e, int dx, int dy) {
     Player *p = &G.player;
 
     /* Instakill check (non-boss) */
@@ -259,6 +287,12 @@ static void player_attack_enemy(Enemy *e) {
         p->kills++;
         log_msg("%s", e->die_msg);
         check_room_clear();
+        return;
+    }
+
+    /* Knockback (melee only, non-boss) */
+    if (!e->boss && p->momentum > 0) {
+        apply_knockback(e, dx, dy, p->momentum);
     }
 }
 
@@ -322,7 +356,7 @@ bool player_move(int dx, int dy) {
         Enemy *e = &r->enemies[i];
         if (!e->alive) continue;
         if (e->x == nx && e->y == ny) {
-            player_attack_enemy(e);
+            player_attack_enemy(e, dx, dy);
             p->turn++;
             return true;
         }

@@ -49,7 +49,7 @@ static const Dir OPP[4] = { D_S, D_N, D_W, D_E };
 typedef enum {
     T_VOID=0, T_WALL, T_FLOOR,
     T_DOOR_OPEN, T_DOOR_LOCK,
-    T_STAIRS, T_ITEM
+    T_STAIRS, T_ITEM, T_VISCERA
 } TileType;
 
 /* ─── Items ─────────────────────────────────────────────────────────── */
@@ -112,6 +112,7 @@ typedef struct {
     int  charges;
     bool item_boost;    /* Tome of Kings effect */
     int  extra_slots;   /* Duffel: number of bonus item slots */
+    int  momentum;      /* melee knockback tiles added */
     char sym;
     int  cp;
 } ItemDef;
@@ -246,6 +247,7 @@ typedef struct {
     bool     rstone;
     bool     lstone;
     int      grenades;
+    int      momentum;  /* melee knockback tiles (base 1 + items) */
     /* tracking */
     int      kills;
     int      floor_num;

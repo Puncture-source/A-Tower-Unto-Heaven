@@ -140,7 +140,7 @@ const ItemDef ITEMS[IT_COUNT] = {
     [IT_I_AXE] = {
         .name="Inscribed Axe",
         .desc="Ancient script of the Tower runs along the blade.",
-        .atk=5, .bleed=true,
+        .atk=5, .bleed=true, .momentum=1,
         .sym='\\', .cp=CP_ITEM
     },
     [IT_SHOTGUN] = {
@@ -300,6 +300,7 @@ void recalc_stats(void) {
     p->atk = p->base_atk;
     p->def = p->base_def;
     p->spd          = 0;
+    p->momentum     = 1;    /* base: melee always pushes 1 tile */
     p->max_items    = BASE_SLOTS;
     p->has_ranged   = false;
     p->r_dmg = p->r_rng = p->r_ammo = 0;
@@ -320,9 +321,10 @@ void recalc_stats(void) {
         const ItemDef *d = &ITEMS[p->items[i]];
         if (!d) continue;
 
-        p->atk  += (int)(d->atk  * boost);
-        p->def  += (int)(d->def  * boost);
-        p->spd  += d->spd;
+        p->atk      += (int)(d->atk  * boost);
+        p->def      += (int)(d->def  * boost);
+        p->spd      += d->spd;
+        p->momentum += d->momentum;
         p->max_items += d->extra_slots;
         if (d->max_hp > 0)
             p->max_hp = p->max_hp; /* max_hp applied once at pickup */

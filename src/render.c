@@ -104,6 +104,9 @@ static void draw_ui(void) {
     if (p->grenades > 0)
         mvprintw_clip(row++, px, UI_W-2, "GRENADES %-2d", p->grenades);
     attroff(COLOR_PAIR(CP_DEF));
+    attron(COLOR_PAIR(CP_UI));
+    mvprintw_clip(row++, px, UI_W-2, "Momentum %-2d", p->momentum);
+    attroff(COLOR_PAIR(CP_UI));
     row++;
 
     /* Floor / kills */
@@ -1008,6 +1011,10 @@ void render_inventory(int *sel) {
         if (p->grenades > 0)
             mvprintw(0, 58, "GRENADES %d", p->grenades);
         attroff(COLOR_PAIR(CP_DEF));
+        attron(COLOR_PAIR(CP_UI));
+        mvprintw(0, 70, "Mom %d", p->momentum);
+        attroff(COLOR_PAIR(CP_UI));
+        attroff(COLOR_PAIR(CP_DEF));
 
         /* Divider under header */
         attron(COLOR_PAIR(CP_UI));
@@ -1128,6 +1135,10 @@ void render_inventory(int *sel) {
             } else if (d->spd < 0) {
                 snprintf(buf, sizeof(buf), "%d Gait (sluggish)", d->spd);
                 inv_flag(&dr, det_x, buf, CP_DANGER);
+            }
+            if (d->momentum > 0) {
+                snprintf(buf, sizeof(buf), "+%d Momentum", d->momentum);
+                inv_flag(&dr, det_x, buf, CP_UI);
             }
             if (d->gives_ranged) {
                 if (d->r_ammo < 0)
