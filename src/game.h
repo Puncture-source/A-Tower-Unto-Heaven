@@ -273,6 +273,7 @@ typedef struct {
     bool    running;
     int     tw, th;         /* terminal dimensions */
     int     gw, gh;         /* game display area */
+    int     ashwarden_visits; /* times player has spoken to the Ashwarden */
 } Game;
 
 extern Game G;
@@ -321,5 +322,11 @@ void  render_win(void);
 void  render_inventory(int *sel);
 void  render_help(void);
 void  render_map(void);
+void  render_camp(void);
+void  render_shrine(int fire_frame);
+
+/* render_shrine.c */
+void  render_shrine(int fire_frame);
+void  render_shrine_loop(void);
 
 #endif /* GAME_H */

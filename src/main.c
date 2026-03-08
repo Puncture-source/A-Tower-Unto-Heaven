@@ -129,6 +129,11 @@ static bool new_game(void) {
     G.n_projs = 0;
 
     init_player((CharType)sel);
+    G.running = true;
+
+    /* Camp screen — The Last Hearth */
+    render_camp();
+    if (!G.running) return false;
 
     /* Generate floor 0 */
     generate_floor(&G.floors[0], 0);

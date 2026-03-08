@@ -1352,3 +1352,233 @@ void render_inventory(int *sel) {
         }
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * THE LAST HEARTH — camp screen (Firelink Shrine equivalent)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Dialogue tree ──────────────────────────────────────────────────── */
+typedef struct {
+    const char *id;
+    const char *lines[6];   /* null-terminated array of speech lines */
+    const char *opts[4];    /* option labels (null = no more options) */
+    const char *targets[4]; /* node id to jump to, or "ENTER"/"BACK" */
+} DlgNode;
+
+static const DlgNode ASH_NODES[] = {
+    { "greet_first",
+      { "...",
+        "Another one.",
+        "Sit, if you like. The cold does not",
+        "care whether you rest or not.", NULL },
+      { "What is the Tower?",
+        "Who are you?",
+        "I'm ready to climb.", NULL },
+      { "topic_tower", "topic_who", "topic_ready", NULL }
+    },
+    { "greet_second",
+      { "Ah. You came back down.",
+        "They all do, at first.",
+        "The fire is still here. As am I.", NULL },
+      { "What is the Tower?",
+        "Who are you?",
+        "I'm going back up.", NULL },
+      { "topic_tower", "topic_who", "topic_ready", NULL }
+    },
+    { "greet_third",
+      { "Still climbing.",
+        "Hm.", NULL },
+      { "I'm going back up.",
+        "...", NULL },
+      { "topic_ready", "topic_silence", NULL, NULL }
+    },
+    { "topic_tower",
+      { "Old. Wrong. Hungry.",
+        "It was built to reach something.",
+        "Whatever answered — it was not God.",
+        "The Tower keeps climbing. Even now.", NULL },
+      { "Who are you?",
+        "I'm ready to climb.", NULL },
+      { "topic_who", "topic_ready", NULL, NULL }
+    },
+    { "topic_who",
+      { "Someone who stopped climbing.",
+        "I tend the fire.",
+        "It is enough. It has to be.", NULL },
+      { "What is the Tower?",
+        "I'm ready to climb.", NULL },
+      { "topic_tower", "topic_ready", NULL, NULL }
+    },
+    { "topic_ready",
+      { "Then go.",
+        "Don't look for meaning in it.",
+        "Just climb.", NULL },
+      { "[Enter the Tower]", NULL },
+      { "ENTER", NULL, NULL, NULL }
+    },
+    { "topic_silence",
+      { "Yes.",
+        "That is about right.", NULL },
+      { "[Enter the Tower]", NULL },
+      { "ENTER", NULL, NULL, NULL }
+    },
+    { NULL, {NULL}, {NULL}, {NULL} }
+};
+
+static const DlgNode *dlg_find(const char *id) {
+    for (int i = 0; ASH_NODES[i].id != NULL; i++)
+        if (strcmp(ASH_NODES[i].id, id) == 0)
+            return &ASH_NODES[i];
+    return &ASH_NODES[0];
+}
+
+
+/* ─── Dialogue box ───────────────────────────────────────────────────── */
+static void draw_dlg_box(const DlgNode *node, int line_idx, bool show_opts) {
+    int bw = 58;
+    int bx = (G.tw - bw) / 2;
+    int by = 14;
+
+    /* Box border */
+    attron(COLOR_PAIR(CP_UI));
+    mvhline(by,     bx, '-', bw);
+    mvhline(by + 8, bx, '-', bw);
+    for (int r = by+1; r < by+8; r++) {
+        mvaddch(r, bx,      '|');
+        mvaddch(r, bx+bw-1, '|');
+    }
+    attroff(COLOR_PAIR(CP_UI));
+
+    /* Speaker name */
+    attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
+    mvprintw(by, bx + 2, "[ The Ashwarden ]");
+    attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
+
+    /* Speech lines (show all up to current) */
+    int row = by + 1;
+    for (int i = 0; i <= line_idx && node->lines[i] != NULL && row < by+5; i++) {
+        attron(COLOR_PAIR(CP_DEF));
+        mvprintw_clip(row++, bx + 2, bw - 4, "%s", node->lines[i]);
+        attroff(COLOR_PAIR(CP_DEF));
+    }
+
+    /* Options or advance prompt */
+    if (show_opts) {
+        int orow = by + 5;
+        for (int i = 0; i < 4 && node->opts[i] != NULL && orow < by+8; i++) {
+            attron(COLOR_PAIR(CP_PLAYER));
+            mvprintw(orow++, bx + 2, "[%d] %s", i+1, node->opts[i]);
+            attroff(COLOR_PAIR(CP_PLAYER));
+        }
+    } else {
+        attron(COLOR_PAIR(CP_UI) | A_DIM);
+        mvprintw(by + 6, bx + 2, "[Space] continue");
+        attroff(COLOR_PAIR(CP_UI) | A_DIM);
+    }
+}
+
+/* ─── Main camp screen ───────────────────────────────────────────────── */
+void render_camp(void) {
+    halfdelay(4);   /* getch() times out every 0.4 s → fire flickers */
+
+    int  frame      = 0;
+    bool in_talk    = false;
+    bool done       = false;
+
+    /* Pick greeting based on visit count */
+    const char *cur_id;
+    int visits = G.ashwarden_visits;
+    if      (visits == 0) cur_id = "greet_first";
+    else if (visits == 1) cur_id = "greet_second";
+    else                  cur_id = "greet_third";
+
+    const DlgNode *node  = dlg_find(cur_id);
+    int            line_idx = 0;
+    bool           show_opts = false;
+
+    while (!done) {
+        clear();
+        render_shrine(frame);
+
+        if (in_talk) {
+            /* Count lines in current node */
+            int nlines = 0;
+            while (node->lines[nlines]) nlines++;
+            show_opts = (line_idx >= nlines - 1);
+            draw_dlg_box(node, line_idx, show_opts);
+        } else {
+            /* Idle controls */
+            int bx = (G.tw - 54) / 2;
+            attron(COLOR_PAIR(CP_UI) | A_DIM);
+            mvprintw(G.th - 2, bx,
+                     "[t] Talk to the Ashwarden   [Enter] Enter the Tower   [q] Quit");
+            attroff(COLOR_PAIR(CP_UI) | A_DIM);
+        }
+
+        refresh();
+        int ch = getch();
+
+        if (ch == ERR) {
+            /* Timeout → animate fire */
+            frame = (frame + 1) % 3;
+            continue;
+        }
+
+        if (!in_talk) {
+            switch (ch) {
+                case 't': case 'T':
+                    in_talk  = true;
+                    line_idx = 0;
+                    show_opts = false;
+                    break;
+                case '\n': case '\r': case KEY_ENTER: case ' ':
+                    G.ashwarden_visits++;
+                    done = true;
+                    break;
+                case 'q': case 'Q':
+                    G.running = false;
+                    done = true;
+                    break;
+            }
+        } else {
+            /* In dialogue */
+            if (!show_opts) {
+                /* Advance text */
+                if (ch == ' ' || ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
+                    int nlines = 0;
+                    while (node->lines[nlines]) nlines++;
+                    if (line_idx < nlines - 1)
+                        line_idx++;
+                    else
+                        show_opts = true;
+                }
+            } else {
+                /* Option selection */
+                int opt = -1;
+                if (ch >= '1' && ch <= '4') opt = ch - '1';
+
+                if (opt >= 0 && opt < 4 && node->opts[opt] != NULL) {
+                    const char *target = node->targets[opt];
+                    if (strcmp(target, "ENTER") == 0) {
+                        G.ashwarden_visits++;
+                        done = true;
+                    } else {
+                        node     = dlg_find(target);
+                        line_idx = 0;
+                        show_opts = false;
+                    }
+                }
+            }
+
+            /* Esc closes dialogue */
+            if (ch == 27) {
+                in_talk   = false;
+                node      = dlg_find(cur_id);
+                line_idx  = 0;
+                show_opts = false;
+            }
+        }
+    }
+
+    cbreak();   /* restore normal blocking input */
+}
