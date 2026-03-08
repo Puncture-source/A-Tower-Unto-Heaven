@@ -150,18 +150,27 @@ void render_shrine(int fire_frame) {
     attroff(COLOR_PAIR(CP_WALL));
 
     /* -------------------------------------------------------------- */
-    /* LAYER 1: THE TOWER — background centre, rows 0-7               */
-    /* Faint blue/dim to feel distant and oppressive.                  */
+    /* LAYER 1: THE TOWER — tall, leaning, vine-covered stone         */
+    /* Weathered silhouette, faint blue/dim, oppressive.              */
     /* -------------------------------------------------------------- */
-    /*           col offset from ox:  28       */
-    shrine_str(oy+0, ox+31, CP_WALL, A_DIM,  "|   |"         );
-    shrine_str(oy+1, ox+30, CP_WALL, A_DIM,  "/|   |\\"       );
-    shrine_str(oy+2, ox+29, CP_WALL, A_DIM,  "/ |   | \\"     );
-    shrine_str(oy+3, ox+28, CP_WALL, A_DIM,  "/  |   |  \\"   );
-    shrine_str(oy+4, ox+22, CP_WALL, A_DIM,  "_____|  |   |  |_____"  );
-    shrine_str(oy+5, ox+21, CP_WALL, A_DIM,  "|        |   |        |" );
-    shrine_str(oy+6, ox+21, CP_WALL, A_DIM,  "|________|   |________|" );
-    shrine_str(oy+7, ox+31, CP_WALL, A_DIM,  "|   |"         );
+    shrine_str(oy+ 0, ox+35, CP_WALL, A_DIM, "_  _  _");
+    shrine_str(oy+ 1, ox+34, CP_WALL, A_DIM, "[_][_][_]");
+    shrine_str(oy+ 2, ox+34, CP_WALL, A_DIM, "|##:##|");
+    shrine_str(oy+ 3, ox+33, CP_WALL, A_DIM, ".|#~(|)~#|.");
+    shrine_str(oy+ 4, ox+32, CP_WALL, A_DIM, "s.|:!:#:!:|.s");
+    shrine_str(oy+ 5, ox+31, CP_WALL, A_DIM, "s~|##(|)##|~s");
+    shrine_str(oy+ 6, ox+30, CP_WALL, A_DIM, "s~~|#:!:!:#|~~s");
+    shrine_str(oy+ 7, ox+29, CP_WALL, A_DIM, "(~v~|!##|##!|~v~)");
+    shrine_str(oy+ 8, ox+28, CP_WALL, A_DIM, "(&~~s|#~:|:~#|s~~&)");
+    shrine_str(oy+ 9, ox+27, CP_WALL, A_DIM, "(&~~~v|:!#|#!:|v~~~&)");
+    shrine_str(oy+10, ox+26, CP_WALL, A_DIM, "(&~~~~s|##!|!##|s~~~~&)");
+    shrine_str(oy+11, ox+25, CP_WALL, A_DIM, "(&~~~~~v|#:(|):#|v~~~~~&)");
+    shrine_str(oy+12, ox+24, CP_WALL, A_DIM, "(&~~~~~~s|:!!|!!:|s~~~~~~&)");
+    shrine_str(oy+13, ox+23, CP_WALL, A_DIM, "(&~~~~~~~v|##!|!##|v~~~~~~~&)");
+    shrine_str(oy+14, ox+22, CP_WALL, A_DIM, "(&~~~~~~~~s|#~#|#~#|s~~~~~~~~&)");
+    shrine_str(oy+15, ox+21, CP_WALL, A_DIM, "(&~~~~~~~~~v|:!#|#!:|v~~~~~~~~~&)");
+    shrine_str(oy+16, ox+21, CP_WALL, A_DIM, "(&~~~~~~~~~s|##!|!##|s~~~~~~~~~&)");
+    shrine_str(oy+17, ox+33, CP_WALL, A_DIM, "'---------'");
 
     /* -------------------------------------------------------------- */
     /* LAYER 2: RUINED ARCH / BROKEN PILLAR — left side, rows 8-16   */
