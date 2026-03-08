@@ -194,6 +194,16 @@ static void place_enemy(Room *r, EnemyType et) {
         e->y = 1 + rand() % r->h;
         tries++;
     } while (tries < 100 && r->tiles[e->y][e->x] != T_FLOOR);
+    /* Fallback: scan for any floor tile if random placement failed */
+    if (r->tiles[e->y][e->x] != T_FLOOR) {
+        bool found = false;
+        for (int fy = 1; fy <= r->h && !found; fy++)
+            for (int fx = 1; fx <= r->w && !found; fx++)
+                if (r->tiles[fy][fx] == T_FLOOR) {
+                    e->x = fx; e->y = fy; found = true;
+                }
+        if (!found) { r->n_enemies--; return; }
+    }
 }
 
 static EnemyType floor_enemies[3][4] = {
@@ -365,7 +375,33 @@ bool player_move(int dx, int dy) {
     if (nx < 0 || ny < 0 || nx >= RT_W || ny >= RT_H) return false;
     TileType tile = r->tiles[ny][nx];
 
-    if (tile == T_WALL) return false;
+    if (tile == T_WALL) {
+        /* Corridor sidewall fix: the renderer draws all rooms in world space,
+           so a visually-visible floor tile from an adjacent room may sit at the
+           same world position as this corridor's T_WALL.  If so, enter that room. */
+        int pwx = cur_room()->wx + p->x;
+        int pwy = cur_room()->wy + p->y;
+        int twx = pwx + dx;
+        int twy = pwy + dy;
+        int tx, ty;
+        int ri = room_at_world(twx, twy, &tx, &ty);
+        if (ri >= 0 && ri != p->current_room) {
+            Floor *fl = G.cf;
+            Room  *tr = &fl->rooms[ri];
+            TileType wt = tr->tiles[ty][tx];
+            if (wt == T_FLOOR || wt == T_DOOR_OPEN || wt == T_ITEM || wt == T_STAIRS) {
+                /* Determine entry direction for the target room */
+                int from_d = -1;
+                for (int d = 0; d < 4; d++) {
+                    if (DX[d] == dx && DY[d] == dy) { from_d = d; break; }
+                }
+                enter_room(ri, from_d);
+                p->turn++;
+                return true;
+            }
+        }
+        return false;
+    }
     if (tile == T_DOOR_LOCK) {
         log_msg("The door is sealed. The room must be cleared.");
         return false;
@@ -593,9 +629,10 @@ static int bfs_step(Room *r, int sx, int sy, int gx, int gy, bool phase) {
             int nx = cx + DX[d], ny = cy + DY[d];
             if (nx < 0 || ny < 0 || nx >= RT_W || ny >= RT_H) continue;
             if (from[ny][nx] != -1) continue;
+            /* Check goal first — player tile is always reachable regardless of type */
+            if (nx == gx && ny == gy) { from[ny][nx] = (int8_t)d; goto found; }
             if (!tile_passable(r, nx, ny, phase)) continue;
             from[ny][nx] = (int8_t)d;
-            if (nx == gx && ny == gy) goto found;
             queue[tail++] = ny * RT_W + nx;
         }
     }

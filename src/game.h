@@ -291,6 +291,7 @@ Room *cur_room(void);
 void  enter_room(int idx, int from_dir);
 void  lock_doors(Room *r);
 void  unlock_doors(Room *r);
+int   room_at_world(int wx, int wy, int *out_tx, int *out_ty);
 
 /* entity.c */
 void  init_player(CharType ct);

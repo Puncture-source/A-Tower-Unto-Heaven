@@ -244,6 +244,9 @@ static void draw_room(void) {
 
                 TileType t = r->tiles[ty][tx];
                 if (t == T_VOID) continue;
+                /* Corridors are open passages — suppress door glyphs */
+                if (r->is_corridor && t == T_DOOR_OPEN) t = T_FLOOR;
+                if (r->is_corridor && t == T_DOOR_LOCK)  t = T_WALL;
 
                 int ddx = wx - pwx, ddy = wy - pwy;
                 bool in_fov = (ddx*ddx + ddy*ddy) <= fov2;

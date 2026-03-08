@@ -418,6 +418,43 @@ Room *cur_room(void) {
     return &G.cf->rooms[G.player.current_room];
 }
 
+/* ─── World-space tile lookup ────────────────────────────────────────── *
+ * Given a world coordinate (wx, wy), find the best-candidate room and its
+ * local tile at that position.  Returns the room index (into G.cf->rooms)
+ * and sets *out_tx / *out_ty to the local tile coords.  Returns -1 if no room
+ * covers that world position with a non-VOID tile.
+ * Prefer rooms that have the tile as non-WALL (floor/door/etc.) over rooms
+ * that have it as WALL, so that "visible floor" wins.
+ */
+int room_at_world(int wx, int wy, int *out_tx, int *out_ty) {
+    Floor *fl = G.cf;
+    int best = -1;
+    int best_tx = 0, best_ty = 0;
+    bool best_passable = false;
+    for (int ri = 0; ri < fl->n_rooms; ri++) {
+        Room *r = &fl->rooms[ri];
+        int tx = wx - r->wx;
+        int ty = wy - r->wy;
+        if (tx < 0 || ty < 0 || tx >= r->w+2 || ty >= r->h+2) continue;
+        TileType t = r->tiles[ty][tx];
+        if (t == T_VOID) continue;
+        bool pass = (t == T_FLOOR || t == T_DOOR_OPEN || t == T_ITEM ||
+                     t == T_STAIRS || t == T_VISCERA);
+        /* Prefer a passable tile over a wall tile */
+        if (best < 0 || (pass && !best_passable)) {
+            best = ri;
+            best_tx = tx;
+            best_ty = ty;
+            best_passable = pass;
+        }
+    }
+    if (best >= 0) {
+        *out_tx = best_tx;
+        *out_ty = best_ty;
+    }
+    return best;
+}
+
 /* ─── Door state ────────────────────────────────────────────────────── */
 void lock_doors(Room *r) {
     for (int d = 0; d < 4; d++) {
@@ -472,9 +509,29 @@ void enter_room(int idx, int from_dir) {
         if (G.player.x > r->w) G.player.x = r->w;
         if (G.player.y < 1)    G.player.y = 1;
         if (G.player.y > r->h) G.player.y = r->h;
+        /* Fallback: if spawn landed on a wall (embellishment), find nearest floor */
+        if (r->tiles[G.player.y][G.player.x] != T_FLOOR) {
+            for (int fy = 1; fy <= r->h; fy++)
+                for (int fx = 1; fx <= r->w; fx++)
+                    if (r->tiles[fy][fx] == T_FLOOR) {
+                        G.player.x = fx; G.player.y = fy;
+                        goto spawn_done;
+                    }
+            spawn_done:;
+        }
     } else {
         G.player.x = r->w/2 + 1;
         G.player.y = r->h/2 + 1;
+        /* Fallback: start room is embellished — centre may be a wall */
+        if (r->tiles[G.player.y][G.player.x] != T_FLOOR) {
+            for (int fy = 1; fy <= r->h; fy++)
+                for (int fx = 1; fx <= r->w; fx++)
+                    if (r->tiles[fy][fx] == T_FLOOR) {
+                        G.player.x = fx; G.player.y = fy;
+                        goto start_spawn_done;
+                    }
+            start_spawn_done:;
+        }
     }
 
     if (r->is_corridor) return;
