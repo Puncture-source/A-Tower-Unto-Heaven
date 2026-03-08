@@ -197,6 +197,25 @@ void generate_floor(Floor *f, int floor_num) {
     for (int i = 0; i < 2 + floor_num; i++)
         place_maze_item(r, random_pool_item());
 
+    /* Scatter Glimmer deposits */
+    {
+        int ng = 4 + rand() % 4;
+        for (int i = 0; i < ng && r->n_glimmer < 6; i++) {
+            for (int tries = 0; tries < 300; tries++) {
+                int gx = 1 + rand() % r->w;
+                int gy = 1 + rand() % r->h;
+                if (r->tiles[gy][gx] != T_FLOOR) continue;
+                if (gx >= BC_X - 3 && gy >= BC_Y - 3) continue;
+                if (gx <= CW+1 && gy <= CW+1) continue;
+                r->tiles[gy][gx] = T_GLIMMER;
+                r->glimmer_x[r->n_glimmer] = gx;
+                r->glimmer_y[r->n_glimmer] = gy;
+                r->n_glimmer++;
+                break;
+            }
+        }
+    }
+
     compute_map_layout(f);
 }
 

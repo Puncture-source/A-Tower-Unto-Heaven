@@ -39,6 +39,7 @@
 #define CP_BOSS     8   /* red bold         */
 #define CP_FLOOR    9   /* dark grey (white)*/
 #define CP_BLOOD    10  /* red on black     */
+#define CP_GLIMMER  11  /* bright yellow    */
 
 /* ─── Directions ────────────────────────────────────────────────────── */
 typedef enum { D_N=0, D_S, D_E, D_W } Dir;
@@ -46,11 +47,32 @@ static const int DX[4] = { 0,  0,  1, -1 };
 static const int DY[4] = {-1,  1,  0,  0 };
 static const Dir OPP[4] = { D_S, D_N, D_W, D_E };
 
+/* ─── Combat system enums ───────────────────────────────────────────── */
+typedef enum {
+    ASP_NONE=0, ASP_SHAME, ASP_LOOP, ASP_HUNGER,
+    ASP_JUDGEMENT, ASP_STATIC, ASP_ECHO, ASP_STONE, ASP_COUNT
+} Aspect;
+
+typedef enum {
+    TRIG_NONE=0, TRIG_SOUND, TRIG_MOVEMENT, TRIG_SCENT, TRIG_THOUGHT, TRIG_COUNT
+} Trigger;
+
+typedef enum {
+    VERB_REBUKE=0, VERB_FORGET, VERB_ECHO, VERB_MEND,
+    VERB_CHANT, VERB_FEED, VERB_SEAL, VERB_LIE, VERB_COUNT
+} Verb;
+
+typedef enum {
+    FUEL_GLIMMER=0, FUEL_MEMORY, FUEL_ASH, FUEL_FLESH,
+    FUEL_ITEM, FUEL_TURNS, FUEL_COUNT
+} FuelType;
+
 /* ─── Tile ──────────────────────────────────────────────────────────── */
 typedef enum {
     T_VOID=0, T_WALL, T_FLOOR,
     T_DOOR_OPEN, T_DOOR_LOCK,
-    T_STAIRS, T_ITEM, T_VISCERA
+    T_STAIRS, T_ITEM, T_VISCERA,
+    T_GLIMMER   /* collectible resource deposit */
 } TileType;
 
 /* ─── Items ─────────────────────────────────────────────────────────── */
@@ -167,6 +189,17 @@ typedef struct {
     const char *die_msg;
     char        sym;
     int         cp;
+    /* ── Combat system ── */
+    Aspect  aspects[4];
+    int     n_aspects;
+    int     tension;
+    int     max_tension;
+    Trigger triggers[2];
+    int     n_triggers;
+    int     threshold;
+    bool    threshold_fired;
+    int     last_tension_dealt;
+    bool    sealed;
 } Enemy;
 
 /* ─── Room ──────────────────────────────────────────────────────────── */
@@ -193,6 +226,9 @@ typedef struct {
     int      ix[MAX_ROOM_IT];
     int      iy[MAX_ROOM_IT];
     int      n_items;
+    int      glimmer_x[6];
+    int      glimmer_y[6];
+    int      n_glimmer;
 } Room;
 
 /* ─── Floor ─────────────────────────────────────────────────────────── */
@@ -258,6 +294,14 @@ typedef struct {
     int      current_room;
     int      turn;
     int      last_dir;      /* last movement direction */
+    /* ── Combat system ── */
+    int      glimmer;
+    char     memories[8][32];
+    int      n_memories;
+    int      ash;           /* 0-100 entropy stat */
+    bool     chanting;
+    int      chant_turns;
+    bool     husk;          /* true when ash == 100 */
 } Player;
 
 /* ─── Game ──────────────────────────────────────────────────────────── */
@@ -274,6 +318,8 @@ typedef struct {
     int     tw, th;         /* terminal dimensions */
     int     gw, gh;         /* game display area */
     int     ashwarden_visits; /* times player has spoken to the Ashwarden */
+    bool    in_combat;
+    int     combat_round;
 } Game;
 
 extern Game G;
@@ -295,12 +341,18 @@ void  lock_doors(Room *r);
 void  unlock_doors(Room *r);
 int   room_at_world(int wx, int wy, int *out_tx, int *out_ty);
 
+/* combat.c */
+void  enter_combat_panel(Enemy *e);
+void  apply_ash_effects(void);
+bool  fuel_available(FuelType f);
+
 /* entity.c */
 void  init_player(CharType ct);
 bool  player_move(int dx, int dy);
 bool  player_shoot(int dx, int dy);
 void  player_use_grenade(void);
 void  pick_up_items(void);
+void  pick_up_glimmer(void);
 void  update_enemies(void);
 void  update_projs(void);
 void  check_room_clear(void);
@@ -324,6 +376,7 @@ void  render_help(void);
 void  render_map(void);
 void  render_camp(void);
 void  render_shrine(int fire_frame);
+void  render_combat(Enemy *e, int silenced_verb, int step, Verb chosen_verb);
 
 /* render_shrine.c */
 void  render_shrine(int fire_frame);

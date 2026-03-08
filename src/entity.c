@@ -66,6 +66,27 @@ void init_player(CharType ct) {
     }
 
     recalc_stats();
+
+    /* Combat system init */
+    p->glimmer = 3;
+    p->ash     = 0;
+    p->n_memories = 0;
+    p->chanting   = false;
+    p->chant_turns = 0;
+    p->husk       = false;
+
+    static const char *START_MEM[CH_COUNT][4] = {
+        [CH_JACKAL]    = {"The Crossing",    "Her Name",      NULL, NULL},
+        [CH_ZEALOT]    = {"First Blood",     "The Covenant",  "The Broken City", NULL},
+        [CH_FERDINAND] = {"What She Asked",  "The Debt",      NULL, NULL},
+        [CH_RUNBOY]    = {"Where I Come From", NULL,          NULL, NULL},
+        [CH_HUA]       = {"Min's Voice",     "The Last Order","Home", NULL},
+    };
+    for (int i = 0; i < 4 && START_MEM[ct][i]; i++) {
+        strncpy(p->memories[p->n_memories], START_MEM[ct][i], 31);
+        p->memories[p->n_memories][31] = '\0';
+        p->n_memories++;
+    }
 }
 
 /* ─── Enemy definitions ──────────────────────────────────────────────── */
@@ -81,81 +102,132 @@ typedef struct {
     const char *die_msg;
     char sym;
     int cp;
+    /* combat system */
+    int     tension;
+    Aspect  aspects[4];
+    int     n_aspects;
+    Trigger triggers[2];
+    int     n_triggers;
+    int     threshold;
 } EnemyDef;
 
 static const EnemyDef EDEFS[EN_COUNT] = {
     [EN_ORGANELLE] = {
-        .name="Organelle", .hp=10, .atk=3, .def=0, .spd=0,
-        .hit_msg="The Organelle lurches into you.",
+        .name="Organelle", .hp=10, .atk=2, .def=0, .spd=0,
+        .hit_msg="The Organelle lurches. Something pulses inside it.",
         .die_msg="The Organelle collapses, viscera trailing.",
-        .sym='o', .cp=CP_DEF
+        .sym='o', .cp=CP_DEF,
+        .tension=2,
+        .aspects={ASP_HUNGER}, .n_aspects=1,
+        .triggers={TRIG_MOVEMENT}, .n_triggers=1,
+        .threshold=1,
     },
     [EN_BOTFLY] = {
-        .name="Botfly", .hp=7, .atk=4, .def=0, .spd=1,
+        .name="Botfly", .hp=7, .atk=3, .def=0, .spd=1,
         .hit_msg="The Botfly burrows against you.",
         .die_msg="The host collapses, host barely discernible.",
-        .sym='b', .cp=CP_DEF
+        .sym='b', .cp=CP_DEF,
+        .tension=2,
+        .aspects={ASP_ECHO}, .n_aspects=1,
+        .triggers={TRIG_SOUND, TRIG_MOVEMENT}, .n_triggers=2,
+        .threshold=1,
     },
     [EN_BLACKLUNG] = {
         .name="Black Lung", .hp=18, .atk=0, .def=1, .spd=0,
         .ranged=true, .r_dmg=4, .r_rng=8, .r_cd=2,
         .hit_msg="The Black Lung exhales filth at you.",
         .die_msg="The Black Lung deflates with a wet hiss.",
-        .sym='B', .cp=CP_DANGER
+        .sym='B', .cp=CP_DANGER,
+        .tension=3,
+        .aspects={ASP_STATIC}, .n_aspects=1,
+        .triggers={TRIG_SOUND}, .n_triggers=1,
+        .threshold=1,
     },
     [EN_SHADE] = {
-        .name="Shade", .hp=14, .atk=5, .def=0, .spd=0,
+        .name="Shade", .hp=14, .atk=4, .def=0, .spd=0,
         .phasing=true,
         .hit_msg="The Shade passes through you like cold water.",
         .die_msg="The Shade disperses, grief unspent.",
-        .sym='s', .cp=CP_MAGIC
+        .sym='s', .cp=CP_MAGIC,
+        .tension=3,
+        .aspects={ASP_LOOP}, .n_aspects=1,
+        .triggers={TRIG_THOUGHT}, .n_triggers=1,
+        .threshold=1,
     },
     [EN_RAT] = {
-        .name="Plague Rat", .hp=12, .atk=4, .def=0, .spd=1,
+        .name="Plague Rat", .hp=12, .atk=3, .def=0, .spd=1,
         .hit_msg="The Plague Rat gnashes at your leg.",
         .die_msg="The Plague Rat's bloated form bursts.",
-        .sym='r', .cp=CP_DEF
+        .sym='r', .cp=CP_DEF,
+        .tension=2,
+        .aspects={ASP_HUNGER, ASP_ECHO}, .n_aspects=2,
+        .triggers={TRIG_SCENT}, .n_triggers=1,
+        .threshold=1,
     },
     [EN_TITHE] = {
-        .name="Tithe-Taker", .hp=25, .atk=6, .def=3, .spd=0,
+        .name="Tithe-Taker", .hp=25, .atk=5, .def=3, .spd=0,
         .hit_msg="The Tithe-Taker demands its due.",
         .die_msg="Coin and bone clatter to the floor.",
-        .sym='T', .cp=CP_ITEM
+        .sym='T', .cp=CP_ITEM,
+        .tension=4,
+        .aspects={ASP_JUDGEMENT, ASP_STONE}, .n_aspects=2,
+        .triggers={TRIG_SCENT}, .n_triggers=1,
+        .threshold=2,
     },
     [EN_CENSOR] = {
-        .name="Censorite", .hp=30, .atk=7, .def=4, .spd=0,
+        .name="Censorite", .hp=30, .atk=6, .def=4, .spd=0,
         .hit_msg="The Censorite's two hands close around you.",
         .die_msg="The Censorite crumbles, offense unremoved.",
-        .sym='C', .cp=CP_DEF
+        .sym='C', .cp=CP_DEF,
+        .tension=5,
+        .aspects={ASP_STONE, ASP_SHAME}, .n_aspects=2,
+        .triggers={TRIG_SCENT}, .n_triggers=1,
+        .threshold=2,
     },
     [EN_DRONE] = {
         .name="Consumption Drone", .hp=15, .atk=0, .def=0, .spd=1,
         .ranged=true, .r_dmg=3, .r_rng=7, .r_cd=1,
         .hit_msg="The Drone's advertisement burns into your mind.",
         .die_msg="The advertisement loops on a broken screen.",
-        .sym='d', .cp=CP_UI
+        .sym='d', .cp=CP_UI,
+        .tension=3,
+        .aspects={ASP_STATIC, ASP_LOOP}, .n_aspects=2,
+        .triggers={TRIG_SOUND}, .n_triggers=1,
+        .threshold=1,
     },
     /* Bosses */
     [EN_INSIDEOUT] = {
-        .name="Inside-Out-Man", .hp=80, .atk=8, .def=2, .spd=0,
+        .name="Inside-Out-Man", .hp=80, .atk=7, .def=2, .spd=0,
         .hit_msg="The Inside-Out-Man shows you his soft places.",
         .die_msg="He collapses inward. An ally scorned.",
-        .sym='M', .cp=CP_BOSS
+        .sym='M', .cp=CP_BOSS,
+        .tension=6,
+        .aspects={ASP_SHAME, ASP_HUNGER}, .n_aspects=2,
+        .triggers={TRIG_SCENT}, .n_triggers=1,
+        .threshold=3,
     },
     [EN_TENKNIVES] = {
-        .name="Ten-Knives, Wasteland King", .hp=140, .atk=10, .def=3, .spd=0,
+        .name="Ten-Knives, Wasteland King", .hp=140, .atk=9, .def=3, .spd=0,
         .ranged=true, .r_dmg=8, .r_rng=10, .r_cd=2,
         .hit_msg="A knife finds its mark on your skin.",
         .die_msg="The King falls. Eleven notches remain on his belt.",
-        .sym='K', .cp=CP_BOSS
+        .sym='K', .cp=CP_BOSS,
+        .tension=6,
+        .aspects={ASP_ECHO, ASP_JUDGEMENT, ASP_STONE}, .n_aspects=3,
+        .triggers={TRIG_SCENT}, .n_triggers=1,
+        .threshold=3,
     },
     [EN_THRONE] = {
-        .name="The Throne Beneath Heaven", .hp=220, .atk=12, .def=5, .spd=0,
+        .name="The Throne Beneath Heaven", .hp=220, .atk=11, .def=5, .spd=0,
         .ranged=true, .r_dmg=10, .r_rng=12, .r_cd=3,
         .summoner=true, .s_cd=5,
         .hit_msg="The Throne's authority is absolute.",
         .die_msg="Salvation waits at the top. You have found it.",
-        .sym='O', .cp=CP_BOSS
+        .sym='O', .cp=CP_BOSS,
+        .tension=6,
+        .aspects={ASP_LOOP, ASP_STONE, ASP_JUDGEMENT}, .n_aspects=3,
+        .triggers={TRIG_SCENT}, .n_triggers=1,
+        .threshold=3,
     },
 };
 
@@ -187,6 +259,17 @@ static void place_enemy(Room *r, EnemyType et) {
     e->sym     = d->sym;
     e->cp      = d->cp;
     e->alive   = true;
+    /* combat system */
+    e->max_tension = d->tension > 0 ? d->tension : 2;
+    e->tension     = e->max_tension;
+    e->n_aspects   = d->n_aspects;
+    for (int ai = 0; ai < d->n_aspects; ai++) e->aspects[ai]  = d->aspects[ai];
+    e->n_triggers  = d->n_triggers;
+    for (int ti = 0; ti < d->n_triggers; ti++) e->triggers[ti] = d->triggers[ti];
+    e->threshold      = d->threshold;
+    e->threshold_fired = false;
+    e->last_tension_dealt = 0;
+    e->sealed = false;
     /* random position in room interior */
     int tries = 0;
     do {
@@ -235,76 +318,6 @@ void spawn_boss(Room *r, int floor_num) {
     log_msg(""); /* spacer */
 }
 
-/* ─── Knockback ──────────────────────────────────────────────────────── */
-static bool pos_has_enemy(Room *r, int x, int y); /* forward decl */
-static void apply_knockback(Enemy *e, int dx, int dy, int tiles) {
-    Room *r = cur_room();
-    for (int i = 0; i < tiles; i++) {
-        int nx = e->x + dx;
-        int ny = e->y + dy;
-        if (nx < 0 || ny < 0 || nx >= RT_W || ny >= RT_H) break;
-        TileType t = r->tiles[ny][nx];
-        if (t == T_WALL || t == T_DOOR_LOCK || t == T_VOID) {
-            /* Wall slam: bonus damage */
-            int bonus = tiles;
-            e->hp -= bonus;
-            log_msg("The %s slams into the wall! (%d bonus damage)", e->name, bonus);
-            if (e->hp <= 0) {
-                e->alive = false;
-                G.player.kills++;
-                log_msg("%s", e->die_msg);
-                check_room_clear();
-            }
-            break;
-        }
-        if (pos_has_enemy(r, nx, ny)) break; /* stop before occupied tile */
-        e->x = nx;
-        e->y = ny;
-    }
-}
-
-/* ─── Combat: player attacks enemy ──────────────────────────────────── */
-static void player_attack_enemy(Enemy *e, int dx, int dy) {
-    Player *p = &G.player;
-
-    /* Instakill check (non-boss) */
-    if (p->instakill && !e->boss) {
-        float r = (float)rand() / RAND_MAX;
-        if (r < p->ik_ch) {
-            log_msg("You end the %s cleanly. One shot.", e->name);
-            e->hp = 0;
-            e->alive = false;
-            p->kills++;
-            log_msg("%s", e->die_msg);
-            check_room_clear();
-            return;
-        }
-    }
-
-    int dmg = p->atk + roll(-1, 2) - e->def;
-    if (dmg < 1) dmg = 1;
-    e->hp -= dmg;
-    log_msg("You strike the %s for %d damage.", e->name, dmg);
-
-    /* Bleed */
-    if (p->bleed_on_hit && !e->boss && e->bleed < 3) {
-        e->bleed = 3;
-        log_msg("The %s bleeds.", e->name);
-    }
-
-    if (e->hp <= 0) {
-        e->alive = false;
-        p->kills++;
-        log_msg("%s", e->die_msg);
-        check_room_clear();
-        return;
-    }
-
-    /* Knockback (melee only, non-boss) */
-    if (!e->boss && p->momentum > 0) {
-        apply_knockback(e, dx, dy, p->momentum);
-    }
-}
 
 /* ─── Combat: enemy attacks player ──────────────────────────────────── */
 static void enemy_attack_player(Enemy *e) {
@@ -366,7 +379,7 @@ bool player_move(int dx, int dy) {
         Enemy *e = &r->enemies[i];
         if (!e->alive) continue;
         if (e->x == nx && e->y == ny) {
-            player_attack_enemy(e, dx, dy);
+            enter_combat_panel(e);
             p->turn++;
             return true;
         }
@@ -433,7 +446,7 @@ bool player_move(int dx, int dy) {
     p->x = nx;
     p->y = ny;
 
-    /* Notify player when standing on an item */
+    /* Notify player when standing on an item or glimmer */
     if (tile == T_ITEM) {
         Room *cr = cur_room();
         for (int i = 0; i < cr->n_items; i++) {
@@ -442,6 +455,8 @@ bool player_move(int dx, int dy) {
                 break;
             }
         }
+    } else if (tile == T_GLIMMER) {
+        log_msg("Glimmer pools here.  [g] to collect.");
     }
 
     p->turn++;
@@ -548,6 +563,25 @@ void player_use_grenade(void) {
     p->turn++;
 }
 
+/* ─── Pick up glimmer ────────────────────────────────────────────────── */
+void pick_up_glimmer(void) {
+    Player *p = &G.player;
+    Room *r = cur_room();
+    for (int i = 0; i < r->n_glimmer; i++) {
+        if (r->glimmer_x[i] != p->x || r->glimmer_y[i] != p->y) continue;
+        int amt = 2 + roll(0, 2);
+        p->glimmer += amt;
+        r->tiles[r->glimmer_y[i]][r->glimmer_x[i]] = T_FLOOR;
+        for (int j = i; j < r->n_glimmer - 1; j++) {
+            r->glimmer_x[j] = r->glimmer_x[j+1];
+            r->glimmer_y[j] = r->glimmer_y[j+1];
+        }
+        r->n_glimmer--;
+        log_msg("You gather Glimmer (%d total).", p->glimmer);
+        return;
+    }
+}
+
 /* ─── Pick up items ──────────────────────────────────────────────────── */
 void pick_up_items(void) {
     Player *p = &G.player;
@@ -586,6 +620,7 @@ void pick_up_items(void) {
         r->tiles[r->iy[i]][r->ix[i]] = T_FLOOR;
         r->items[i] = IT_NONE;
     }
+    pick_up_glimmer();
 }
 
 /* ─── Enemy AI ───────────────────────────────────────────────────────── */
@@ -593,7 +628,7 @@ static bool tile_passable(Room *r, int x, int y, bool phase) {
     if (x < 0 || y < 0 || x >= RT_W || y >= RT_H) return false;
     TileType t = r->tiles[y][x];
     if (phase) return (t != T_VOID);
-    return (t == T_FLOOR || t == T_DOOR_OPEN || t == T_ITEM || t == T_STAIRS);
+    return (t == T_FLOOR || t == T_DOOR_OPEN || t == T_ITEM || t == T_STAIRS || t == T_GLIMMER);
 }
 
 /* ─── BFS pathfinding ────────────────────────────────────────────────── *

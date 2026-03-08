@@ -20,6 +20,7 @@ void render_init(void) {
     init_pair(CP_BOSS,   COLOR_RED,     COLOR_BLACK);
     init_pair(CP_FLOOR,  COLOR_WHITE,   COLOR_BLACK);
     init_pair(CP_BLOOD,  COLOR_RED,     COLOR_BLACK);
+    init_pair(CP_GLIMMER,COLOR_YELLOW,  COLOR_BLACK);
 
     getmaxyx(stdscr, G.th, G.tw);
     G.gw = G.tw - UI_W;
@@ -107,6 +108,28 @@ static void draw_ui(void) {
     attron(COLOR_PAIR(CP_UI));
     mvprintw_clip(row++, px, UI_W-2, "Momentum %-2d", p->momentum);
     attroff(COLOR_PAIR(CP_UI));
+
+    /* Combat resources */
+    attron(COLOR_PAIR(CP_GLIMMER) | A_BOLD);
+    mvprintw_clip(row++, px, UI_W-2, "Glimmer  %-3d", p->glimmer);
+    attroff(COLOR_PAIR(CP_GLIMMER) | A_BOLD);
+
+    attron(COLOR_PAIR(CP_MAGIC));
+    mvprintw_clip(row++, px, UI_W-2, "Memories %-2d", p->n_memories);
+    attroff(COLOR_PAIR(CP_MAGIC));
+
+    {
+        int ash_cp = p->ash >= 100 ? CP_BOSS :
+                     p->ash >= 67  ? CP_DANGER :
+                     p->ash >= 34  ? CP_ITEM : CP_PLAYER;
+        int ash_at = p->ash >= 100 ? A_BOLD : 0;
+        attron(COLOR_PAIR(ash_cp) | ash_at);
+        if (p->husk)
+            mvprintw_clip(row++, px, UI_W-2, "Ash      HUSK");
+        else
+            mvprintw_clip(row++, px, UI_W-2, "Ash      %-3d", p->ash);
+        attroff(COLOR_PAIR(ash_cp) | ash_at);
+    }
     row++;
 
     /* Floor / kills */
@@ -146,7 +169,7 @@ static void draw_ui(void) {
             attron(e->boss ? COLOR_PAIR(CP_BOSS) | A_BOLD : COLOR_PAIR(CP_DANGER));
             char line[UI_W+1];
             snprintf(line, sizeof(line), " %-*s%d/%d",
-                     UI_W - 7, e->name, e->hp, e->max_hp);
+                     UI_W - 7, e->name, e->tension, e->max_tension);
             line[UI_W-1] = '\0';
             mvprintw(row++, px, "%s", line);
             attroff(COLOR_PAIR(CP_DANGER) | COLOR_PAIR(CP_BOSS) | A_BOLD);
@@ -332,6 +355,11 @@ static void draw_room(void) {
                             attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
                             mvaddch(sy, sx, '?');
                             attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
+                            break;
+                        case T_GLIMMER:
+                            attron(COLOR_PAIR(CP_GLIMMER) | A_BOLD);
+                            mvaddch(sy, sx, '*');
+                            attroff(COLOR_PAIR(CP_GLIMMER) | A_BOLD);
                             break;
                         default:
                             break;
@@ -1581,4 +1609,208 @@ void render_camp(void) {
     }
 
     cbreak();   /* restore normal blocking input */
+}
+
+/* ─── Combat panel ───────────────────────────────────────────────────── */
+/*
+ * step 0 = choosing verb (press 1-8)
+ * step 1 = choosing fuel (press g/m/a/f/i/t)
+ * chosen_verb only meaningful when step == 1
+ */
+void render_combat(Enemy *e, int silenced_verb, int step, Verb chosen_verb) {
+    clear();
+    getmaxyx(stdscr, G.th, G.tw);
+    Player *p = &G.player;
+
+    static const char *ASP_LABEL[ASP_COUNT] = {
+        "", "SHAME", "LOOP", "HUNGER", "JUDGEMENT", "STATIC", "ECHO", "STONE"
+    };
+    static const char *VERB_LABEL[VERB_COUNT] = {
+        "REBUKE","FORGET","ECHO","MEND","CHANT","FEED","SEAL","LIE"
+    };
+    static const char *VERB_DESC[VERB_COUNT] = {
+        "Direct force",    "Strip an aspect", "Mirror wound",   "Heal / purge Ash",
+        "Ritual buffer",   "Satisfy hunger",  "Lock it still",  "Twist reality"
+    };
+    static const char  FUEL_KEY[FUEL_COUNT]    = {'g','m','a','f','i','t'};
+    static const char *FUEL_LABEL[FUEL_COUNT]  = {
+        "Glimmer","Memory","Ash","Flesh","Item","Turns"
+    };
+
+    /* ── Header ── */
+    attron(COLOR_PAIR(CP_UI) | A_BOLD);
+    mvprintw(0, 2, "[ ENCOUNTER ]  %s", e->name);
+    mvprintw(0, G.tw - 14, "Round: %-4d", G.combat_round);
+    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    mvhline(1, 0, '-', G.tw);
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    /* ── Enemy: tension pips ── */
+    int display_tension = e->tension;
+    if (p->ash >= 67 && (rand() % 6 == 0)) {
+        display_tension += (rand() % 3) - 1;
+        if (display_tension < 0) display_tension = 0;
+        if (display_tension > e->max_tension + 1) display_tension = e->max_tension + 1;
+    }
+
+    attron(COLOR_PAIR(CP_DANGER) | A_BOLD);
+    mvprintw(2, 2, "TENSION %d/%d", display_tension, e->max_tension);
+    attroff(COLOR_PAIR(CP_DANGER) | A_BOLD);
+    attron(COLOR_PAIR(CP_DANGER));
+    for (int i = 0; i < e->max_tension && i < 12; i++)
+        mvaddch(2, 16 + i, i < display_tension ? '#' : '.');
+    attroff(COLOR_PAIR(CP_DANGER));
+
+    /* Aspects */
+    int ax = 30;
+    for (int i = 0; i < e->n_aspects && ax < G.tw - 12; i++) {
+        attron(COLOR_PAIR(CP_MAGIC));
+        mvprintw(2, ax, "[%s]", ASP_LABEL[e->aspects[i]]);
+        attroff(COLOR_PAIR(CP_MAGIC));
+        ax += (int)strlen(ASP_LABEL[e->aspects[i]]) + 3;
+    }
+
+    /* Threshold note */
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    if (!e->threshold_fired)
+        mvprintw(3, 2, "At tension %d: threshold event", e->threshold);
+    else
+        mvprintw(3, 2, "Threshold triggered.");
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    /* Flavour */
+    if (e->hit_msg) {
+        attron(COLOR_PAIR(CP_DEF) | A_DIM);
+        mvprintw(4, 4, "%s", e->hit_msg);
+        attroff(COLOR_PAIR(CP_DEF) | A_DIM);
+    }
+
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    mvhline(5, 0, '-', G.tw);
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    /* ── Player stats ── */
+    attron(COLOR_PAIR(CP_PLAYER));
+    mvprintw(6, 2, "Flesh  %d/%d", p->hp, p->max_hp);
+    attroff(COLOR_PAIR(CP_PLAYER));
+
+    int ash_cp = p->ash >= 100 ? CP_BOSS :
+                 p->ash >= 67  ? CP_DANGER :
+                 p->ash >= 34  ? CP_ITEM : CP_PLAYER;
+    attron(COLOR_PAIR(ash_cp));
+    if (p->husk) mvprintw(6, 18, "Ash: HUSK");
+    else         mvprintw(6, 18, "Ash: %-3d", p->ash);
+    if (p->ash >= 100)     { attron(A_BOLD); mvprintw(6, 26, "[HUSK]");      attroff(A_BOLD); }
+    else if (p->ash >= 67) mvprintw(6, 26, "[GLITCHING]");
+    else if (p->ash >= 34) mvprintw(6, 26, "[MISFIRING]");
+    attroff(COLOR_PAIR(ash_cp));
+
+    attron(COLOR_PAIR(CP_GLIMMER));
+    mvprintw(7, 2, "Glimmer %-3d", p->glimmer);
+    attroff(COLOR_PAIR(CP_GLIMMER));
+
+    attron(COLOR_PAIR(CP_MAGIC));
+    mvprintw(7, 18, "Memories %-2d", p->n_memories);
+    attroff(COLOR_PAIR(CP_MAGIC));
+
+    if (p->chanting) {
+        attron(COLOR_PAIR(CP_MAGIC) | A_DIM);
+        mvprintw(7, 32, "~ chanting (%d) ~", p->chant_turns);
+        attroff(COLOR_PAIR(CP_MAGIC) | A_DIM);
+    }
+
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    mvhline(8, 0, '-', G.tw);
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    /* ── Verb menu ── */
+    int verb_active = (step == 0);
+    attron(COLOR_PAIR(CP_UI) | A_BOLD);
+    mvprintw(9, 2, verb_active ? "CHOOSE VERB:" : "VERB chosen: %s", verb_active ? "" : VERB_LABEL[(int)chosen_verb]);
+    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+
+    for (int i = 0; i < VERB_COUNT; i++) {
+        int vy = 10 + (i / 4);
+        int vx = 2 + (i % 4) * (G.tw / 4);
+        bool silenced = (i == silenced_verb);
+        bool husk_locked = p->husk && i != VERB_MEND && i != VERB_SEAL;
+        bool is_chosen = (!verb_active && (int)chosen_verb == i);
+
+        if (is_chosen) {
+            attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
+            mvprintw(vy, vx, "[%d] %-8s", i+1, VERB_LABEL[i]);
+            attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
+        } else if (silenced || husk_locked) {
+            attron(COLOR_PAIR(CP_WALL) | A_DIM);
+            mvprintw(vy, vx, "[%d] %-8s", i+1, VERB_LABEL[i]);
+            attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+        } else {
+            attron(COLOR_PAIR(CP_PLAYER) | A_BOLD);
+            mvprintw(vy, vx, "[%d]", i+1);
+            attroff(COLOR_PAIR(CP_PLAYER) | A_BOLD);
+            attron(COLOR_PAIR(CP_DEF));
+            mvprintw(vy, vx+3, " %-8s", VERB_LABEL[i]);
+            attroff(COLOR_PAIR(CP_DEF));
+        }
+        if (vx + 13 < G.tw) {
+            attron(COLOR_PAIR(CP_WALL) | A_DIM);
+            mvprintw(vy, vx + 12, "%-16s", VERB_DESC[i]);
+            attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+        }
+    }
+
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    mvhline(12, 0, '-', G.tw);
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    /* ── Fuel menu ── */
+    attron(COLOR_PAIR(CP_UI) | A_BOLD);
+    mvprintw(13, 2, step == 1 ? "CHOOSE FUEL:" : "FUEL:");
+    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+
+    int fx = 16;
+    for (int i = 0; i < FUEL_COUNT; i++) {
+        bool avail = fuel_available((FuelType)i);
+        if (avail) {
+            attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
+            mvprintw(13, fx, "[%c]", FUEL_KEY[i]);
+            attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
+            attron(COLOR_PAIR(CP_DEF));
+            mvprintw(13, fx+3, " %-8s", FUEL_LABEL[i]);
+            attroff(COLOR_PAIR(CP_DEF));
+        } else {
+            attron(COLOR_PAIR(CP_WALL) | A_DIM);
+            mvprintw(13, fx, "[%c] %-8s", FUEL_KEY[i], FUEL_LABEL[i]);
+            attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+        }
+        fx += 13;
+        if (fx >= G.tw - 13) break;
+    }
+
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    mvhline(14, 0, '-', G.tw);
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    /* ── Recent log ── */
+    MsgLog *ml = &G.log;
+    int msg_start = ml->count - 4;
+    if (msg_start < 0) msg_start = 0;
+    for (int i = msg_start; i < ml->count; i++) {
+        int log_row = 15 + (i - msg_start);
+        if (log_row >= G.th - 1) break;
+        attron(COLOR_PAIR(CP_DEF) | A_DIM);
+        mvprintw(log_row, 2, "> %s", ml->lines[i]);
+        attroff(COLOR_PAIR(CP_DEF) | A_DIM);
+    }
+
+    /* ── Footer ── */
+    attron(COLOR_PAIR(CP_WALL) | A_DIM);
+    mvprintw(G.th-1, 2, step == 0
+        ? "[1-8] choose verb   [Esc] attempt to flee"
+        : "[g/m/a/f/i/t] choose fuel   [Esc] cancel");
+    attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+
+    refresh();
 }

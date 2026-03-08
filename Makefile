@@ -2,7 +2,7 @@ CC      = gcc
 CFLAGS  = -Wall -Wextra -std=c11 -g -O2
 LDFLAGS = -lncurses -lm
 
-SRC = src/main.c src/map.c src/entity.c src/items.c src/render.c src/render_shrine.c
+SRC = src/main.c src/map.c src/entity.c src/items.c src/render.c src/render_shrine.c src/combat.c
 OBJ = $(SRC:.c=.o)
 TARGET = tower
 
