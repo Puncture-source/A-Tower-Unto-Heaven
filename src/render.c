@@ -226,53 +226,83 @@ static void draw_room(void) {
     if (oy < 0) oy = 0;
 
     /* Tiles */
+    int fov2 = FOV_RADIUS * FOV_RADIUS;
     for (int ty = 0; ty < rh && ty < RT_H; ty++) {
         for (int tx = 0; tx < rw && tx < RT_W; tx++) {
             int sx = ox + tx;
             int sy = oy + ty;
             if (sx >= G.gw || sy >= G.gh) continue;
             TileType t = r->tiles[ty][tx];
-            switch (t) {
-                case T_WALL:
-                    attron(COLOR_PAIR(CP_WALL));
-                    mvaddch(sy, sx, '#');
-                    attroff(COLOR_PAIR(CP_WALL));
-                    break;
-                case T_FLOOR:
-                    attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
-                    mvaddch(sy, sx, '.');
-                    attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
-                    break;
-                case T_DOOR_OPEN:
-                    attron(COLOR_PAIR(CP_ITEM));
-                    mvaddch(sy, sx, '+');
-                    attroff(COLOR_PAIR(CP_ITEM));
-                    break;
-                case T_DOOR_LOCK:
-                    attron(COLOR_PAIR(CP_DANGER));
-                    mvaddch(sy, sx, '=');
-                    attroff(COLOR_PAIR(CP_DANGER));
-                    break;
-                case T_STAIRS:
-                    attron(COLOR_PAIR(CP_UI) | A_BOLD);
-                    mvaddch(sy, sx, '>');
-                    attroff(COLOR_PAIR(CP_UI) | A_BOLD);
-                    break;
-                case T_ITEM:
-                    attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
-                    mvaddch(sy, sx, '?');
-                    attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
-                    break;
-                default:
-                    break;
+            int ddx = tx - p->x, ddy = ty - p->y;
+            bool in_fov = (ddx*ddx + ddy*ddy) <= fov2;
+
+            if (in_fov) {
+                /* Full rendering */
+                switch (t) {
+                    case T_WALL:
+                        attron(COLOR_PAIR(CP_WALL));
+                        mvaddch(sy, sx, '#');
+                        attroff(COLOR_PAIR(CP_WALL));
+                        break;
+                    case T_FLOOR:
+                        attron(COLOR_PAIR(CP_FLOOR) | A_DIM);
+                        mvaddch(sy, sx, '.');
+                        attroff(COLOR_PAIR(CP_FLOOR) | A_DIM);
+                        break;
+                    case T_DOOR_OPEN:
+                        attron(COLOR_PAIR(CP_ITEM));
+                        mvaddch(sy, sx, '+');
+                        attroff(COLOR_PAIR(CP_ITEM));
+                        break;
+                    case T_DOOR_LOCK:
+                        attron(COLOR_PAIR(CP_DANGER));
+                        mvaddch(sy, sx, '=');
+                        attroff(COLOR_PAIR(CP_DANGER));
+                        break;
+                    case T_STAIRS:
+                        attron(COLOR_PAIR(CP_UI) | A_BOLD);
+                        mvaddch(sy, sx, '>');
+                        attroff(COLOR_PAIR(CP_UI) | A_BOLD);
+                        break;
+                    case T_ITEM:
+                        attron(COLOR_PAIR(CP_ITEM) | A_BOLD);
+                        mvaddch(sy, sx, '?');
+                        attroff(COLOR_PAIR(CP_ITEM) | A_BOLD);
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                /* Out of sight: show wall/door structure only, dimly */
+                switch (t) {
+                    case T_WALL:
+                        attron(COLOR_PAIR(CP_WALL) | A_DIM);
+                        mvaddch(sy, sx, '#');
+                        attroff(COLOR_PAIR(CP_WALL) | A_DIM);
+                        break;
+                    case T_DOOR_OPEN:
+                        attron(COLOR_PAIR(CP_DEF) | A_DIM);
+                        mvaddch(sy, sx, '+');
+                        attroff(COLOR_PAIR(CP_DEF) | A_DIM);
+                        break;
+                    case T_DOOR_LOCK:
+                        attron(COLOR_PAIR(CP_DEF) | A_DIM);
+                        mvaddch(sy, sx, '=');
+                        attroff(COLOR_PAIR(CP_DEF) | A_DIM);
+                        break;
+                    default:
+                        break; /* floor, items, stairs: hidden in darkness */
+                }
             }
         }
     }
 
-    /* Enemies */
+    /* Enemies (only within FOV) */
     for (int i = 0; i < r->n_enemies; i++) {
         Enemy *e = &r->enemies[i];
         if (!e->alive) continue;
+        int edx = e->x - p->x, edy = e->y - p->y;
+        if (edx*edx + edy*edy > fov2) continue;
         int sx = ox + e->x, sy = oy + e->y;
         if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
         attr_t attr = COLOR_PAIR(e->cp);

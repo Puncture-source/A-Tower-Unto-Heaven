@@ -5,19 +5,19 @@ Game G;
 
 /* ─── Input: shoot mode ─────────────────────────────────────────────── */
 static bool handle_shoot_mode(void) {
-    log_msg("Shoot direction? [hjkl/arrows]");
+    log_msg("Shoot direction? [hjkl / numpad]");
     render_game();
     int ch = getch();
     int dx = 0, dy = 0;
     switch (ch) {
-        case 'h': case KEY_LEFT:  dx=-1; break;
-        case 'l': case KEY_RIGHT: dx= 1; break;
-        case 'k': case KEY_UP:    dy=-1; break;
-        case 'j': case KEY_DOWN:  dy= 1; break;
-        case 'y': dx=-1; dy=-1; break;
-        case 'u': dx= 1; dy=-1; break;
-        case 'b': dx=-1; dy= 1; break;
-        case 'n': dx= 1; dy= 1; break;
+        case 'h': case KEY_LEFT:  case '4': dx=-1; break;
+        case 'l': case KEY_RIGHT: case '6': dx= 1; break;
+        case 'k': case KEY_UP:    case '8': dy=-1; break;
+        case 'j': case KEY_DOWN:  case '2': dy= 1; break;
+        case 'y': case '7': case KEY_HOME:  dx=-1; dy=-1; break;
+        case 'u': case '9': case KEY_PPAGE: dx= 1; dy=-1; break;
+        case 'b': case '1': case KEY_END:   dx=-1; dy= 1; break;
+        case 'n': case '3': case KEY_NPAGE: dx= 1; dy= 1; break;
         default: log_msg("Cancelled."); return false;
     }
     return player_shoot(dx, dy);
@@ -28,16 +28,16 @@ static bool handle_input(int ch) {
     /* Returns true if a turn was taken */
     int dx = 0, dy = 0;
     switch (ch) {
-        /* Movement */
-        case 'h': case KEY_LEFT:  dx=-1; break;
-        case 'l': case KEY_RIGHT: dx= 1; break;
-        case 'k': case KEY_UP:    dy=-1; break;
-        case 'j': case KEY_DOWN:  dy= 1; break;
-        case 'y': dx=-1; dy=-1; break;
-        case 'u': dx= 1; dy=-1; break;
-        case 'b': dx=-1; dy= 1; break;
-        case 'n': dx= 1; dy= 1; break;
-        case '.': case ' ':   /* wait */
+        /* Movement — hjkl, arrows, and numpad */
+        case 'h': case KEY_LEFT:  case '4': dx=-1; break;
+        case 'l': case KEY_RIGHT: case '6': dx= 1; break;
+        case 'k': case KEY_UP:    case '8': dy=-1; break;
+        case 'j': case KEY_DOWN:  case '2': dy= 1; break;
+        case 'y': case '7': case KEY_HOME:  dx=-1; dy=-1; break;
+        case 'u': case '9': case KEY_PPAGE: dx= 1; dy=-1; break;
+        case 'b': case '1': case KEY_END:   dx=-1; dy= 1; break;
+        case 'n': case '3': case KEY_NPAGE: dx= 1; dy= 1; break;
+        case '.': case ' ': case '5': case KEY_B2: /* wait */
             G.player.turn++;
             return true;
 

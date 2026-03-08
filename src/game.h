@@ -26,6 +26,7 @@
 #define BASE_SLOTS   6      /* default item slots */
 #define MAX_MSG     80
 #define MSG_LEN     120
+#define FOV_RADIUS  8       /* player sight radius in tiles (tweak freely) */
 
 /* ─── Colour pairs ──────────────────────────────────────────────────── */
 #define CP_DEF      1   /* white on black   */
