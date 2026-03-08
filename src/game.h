@@ -12,12 +12,12 @@
 
 /* ─── Constants ────────────────────────────────────────────────────── */
 #define GAME_NAME   "A Tower Unto Heaven"
-#define NUM_FLOORS  3
+#define NUM_FLOORS  1
 #define UI_W        22      /* right-side panel width */
 #define MSG_H       5       /* bottom message rows */
-#define MAX_ROOMS   60
-#define MAX_ROOM_W  30      /* interior (excl. walls) */
-#define MAX_ROOM_H  14
+#define MAX_ROOMS   4
+#define MAX_ROOM_W  58      /* interior (excl. walls) — maze room */
+#define MAX_ROOM_H  26
 #define RT_W        (MAX_ROOM_W + 2)
 #define RT_H        (MAX_ROOM_H + 2)
 #define MAX_ROOM_EN 10      /* enemies per room */
@@ -183,6 +183,7 @@ typedef struct {
     bool is_corridor;
     bool is_alcove;     /* dead-end pocket, no enemies */
     bool has_stairs;
+    int  stairs_x, stairs_y; /* where stairs tile appears after boss dies */
     int  map_x, map_y;  /* minimap grid position (set by BFS after generation) */
     int  wx, wy;        /* world tile offset for continuous rendering */
     bool seen[RT_H][RT_W]; /* tiles revealed by FOV (persists) */

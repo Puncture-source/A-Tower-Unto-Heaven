@@ -376,26 +376,21 @@ bool player_move(int dx, int dy) {
     TileType tile = r->tiles[ny][nx];
 
     if (tile == T_WALL) {
-        /* Corridor sidewall fix: the renderer draws all rooms in world space,
-           so a visually-visible floor tile from an adjacent room may sit at the
-           same world position as this corridor's T_WALL.  If so, enter that room. */
-        int pwx = cur_room()->wx + p->x;
-        int pwy = cur_room()->wy + p->y;
-        int twx = pwx + dx;
-        int twy = pwy + dy;
-        int tx, ty;
-        int ri = room_at_world(twx, twy, &tx, &ty);
-        if (ri >= 0 && ri != p->current_room) {
-            Floor *fl = G.cf;
-            Room  *tr = &fl->rooms[ri];
-            TileType wt = tr->tiles[ty][tx];
-            if (wt == T_FLOOR || wt == T_DOOR_OPEN || wt == T_ITEM || wt == T_STAIRS) {
-                /* Determine entry direction for the target room */
-                int from_d = -1;
-                for (int d = 0; d < 4; d++) {
-                    if (DX[d] == dx && DY[d] == dy) { from_d = d; break; }
-                }
-                enter_room(ri, from_d);
+        /* Border-wall passthrough: if stepping into the border face of the
+           current room in the direction of an unlocked connection, enter that
+           room.  This lets the player exit wide corridors from any row/column,
+           not only from the exact door tile. */
+        for (int d = 0; d < 4; d++) {
+            if (r->conn[d] < 0 || dx != DX[d] || dy != DY[d]) continue;
+            /* Door must be unlocked */
+            if (r->tiles[r->door_y[d]][r->door_x[d]] != T_DOOR_OPEN) continue;
+            bool on_face =
+                (d == D_E && nx == r->w+1 && ny >= 1 && ny <= r->h) ||
+                (d == D_W && nx == 0      && ny >= 1 && ny <= r->h) ||
+                (d == D_S && ny == r->h+1 && nx >= 1 && nx <= r->w) ||
+                (d == D_N && ny == 0      && nx >= 1 && nx <= r->w);
+            if (on_face) {
+                enter_room(r->conn[d], d);
                 p->turn++;
                 return true;
             }
@@ -424,16 +419,12 @@ bool player_move(int dx, int dy) {
         return true;
     }
     if (tile == T_DOOR_OPEN) {
-        /* Room transition */
+        /* Room transition — direction-based to support wide corridor end walls */
         for (int d = 0; d < 4; d++) {
-            if (r->conn[d] >= 0 &&
-                r->door_x[d] == nx && r->door_y[d] == ny) {
-                /* check move aligns with door direction */
-                if (dx == DX[d] && dy == DY[d]) {
-                    enter_room(r->conn[d], d);
-                    p->turn++;
-                    return true;
-                }
+            if (r->conn[d] >= 0 && dx == DX[d] && dy == DY[d]) {
+                enter_room(r->conn[d], d);
+                p->turn++;
+                return true;
             }
         }
         /* fallthrough: step onto door tile without transition */
@@ -716,7 +707,13 @@ void update_enemies(void) {
         if (!e->alive) continue;
         if (!r->visited)  continue;
 
-        e->alerted = true;
+        /* Alert on proximity — enemies far in the maze don't charge immediately */
+        {
+            int d = abs(e->x - p->x) + abs(e->y - p->y);
+            if (!e->alerted && d <= FOV_RADIUS + 4)
+                e->alerted = true;
+        }
+        if (!e->alerted) continue;
 
         /* Bleed tick */
         if (e->bleed > 0) {
@@ -798,15 +795,19 @@ void update_enemies(void) {
 void check_room_clear(void) {
     Room *r = cur_room();
     if (r->cleared) return;
-    for (int i = 0; i < r->n_enemies; i++)
-        if (r->enemies[i].alive) return;
-    r->cleared = true;
-    unlock_doors(r);
+
     if (r->boss_room) {
-        /* Reveal stairs */
-        r->tiles[r->h/2 + 1][r->w/2 + 1] = T_STAIRS;
+        /* Only the boss needs to die — regular maze enemies don't block ascent */
+        for (int i = 0; i < r->n_enemies; i++)
+            if (r->enemies[i].alive && r->enemies[i].boss) return;
+        r->cleared = true;
+        r->tiles[r->stairs_y][r->stairs_x] = T_STAIRS;
         log_msg("The Tower shudders. Stairs appear. Ascend.");
     } else {
+        for (int i = 0; i < r->n_enemies; i++)
+            if (r->enemies[i].alive) return;
+        r->cleared = true;
+        unlock_doors(r);
         log_msg("The room is cleared. The doors open.");
     }
 }

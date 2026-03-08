@@ -213,6 +213,55 @@ static void draw_messages(void) {
     }
 }
 
+/* ─── Raycasted FOV ─────────────────────────────────────────────────── */
+#define FOV_DIM (FOV_RADIUS * 2 + 1)
+static bool fov_map[FOV_DIM][FOV_DIM];
+
+/* Returns true if the world tile at (wx,wy) is opaque (blocks LOS). */
+static bool world_blocks_los(int wx, int wy) {
+    int tx, ty;
+    int ri = room_at_world(wx, wy, &tx, &ty);
+    if (ri < 0) return true;
+    TileType t = G.cf->rooms[ri].tiles[ty][tx];
+    return (t == T_WALL || t == T_DOOR_LOCK || t == T_VOID);
+}
+
+/* Bresenham ray from (pwx,pwy) to (twx,twy); checks intermediate tiles only.
+   Returns true if no opaque tile blocks the ray before reaching the target. */
+static bool los_clear(int pwx, int pwy, int twx, int twy) {
+    int dx = twx - pwx, dy = twy - pwy;
+    if (dx == 0 && dy == 0) return true;
+    int ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
+    int sx = dx < 0 ? -1 : 1,  sy = dy < 0 ? -1 : 1;
+    int x = pwx, y = pwy;
+    int err = ax - ay;
+    while (true) {
+        int e2 = 2 * err;
+        if (e2 >= -ay) { err -= ay; x += sx; }
+        if (e2 <=  ax) { err += ax; y += sy; }
+        if (x == twx && y == twy) return true;
+        if (world_blocks_los(x, y)) return false;
+    }
+}
+
+/* Compute visibility for every offset in [-FOV_RADIUS, FOV_RADIUS]^2. */
+static void compute_fov(int pwx, int pwy) {
+    int r2 = FOV_RADIUS * FOV_RADIUS;
+    for (int ddy = -FOV_RADIUS; ddy <= FOV_RADIUS; ddy++) {
+        for (int ddx = -FOV_RADIUS; ddx <= FOV_RADIUS; ddx++) {
+            bool vis = (ddx*ddx + ddy*ddy <= r2) &&
+                       los_clear(pwx, pwy, pwx + ddx, pwy + ddy);
+            fov_map[ddy + FOV_RADIUS][ddx + FOV_RADIUS] = vis;
+        }
+    }
+}
+
+static bool in_fov(int ddx, int ddy) {
+    if (ddx < -FOV_RADIUS || ddx > FOV_RADIUS) return false;
+    if (ddy < -FOV_RADIUS || ddy > FOV_RADIUS) return false;
+    return fov_map[ddy + FOV_RADIUS][ddx + FOV_RADIUS];
+}
+
 /* ─── Room rendering ────────────────────────────────────────────────── */
 static void draw_room(void) {
     Player *p  = &G.player;
@@ -227,7 +276,7 @@ static void draw_room(void) {
     int vx = pwx - G.gw / 2;
     int vy = pwy - G.gh / 2;
 
-    int fov2 = FOV_RADIUS * FOV_RADIUS;
+    compute_fov(pwx, pwy);
 
     /* ── Tiles (all rooms) ── */
     for (int ri = 0; ri < fl->n_rooms; ri++) {
@@ -249,9 +298,9 @@ static void draw_room(void) {
                 if (r->is_corridor && t == T_DOOR_LOCK)  t = T_WALL;
 
                 int ddx = wx - pwx, ddy = wy - pwy;
-                bool in_fov = (ddx*ddx + ddy*ddy) <= fov2;
+                bool visible = in_fov(ddx, ddy);
 
-                if (in_fov) {
+                if (visible) {
                     r->seen[ty][tx] = true; /* permanently reveal this tile */
                     switch (t) {
                         case T_WALL:
@@ -287,7 +336,7 @@ static void draw_room(void) {
                         default:
                             break;
                     }
-                } else if (r->seen[ty][tx]) {
+                } else if (r->seen[ty][tx] && !visible) {
                     /* Previously seen but not currently visible: dim outline */
                     switch (t) {
                         case T_WALL:
@@ -328,7 +377,7 @@ static void draw_room(void) {
             if (!e->alive) continue;
             int ewx = r->wx + e->x, ewy = r->wy + e->y;
             int ddx = ewx - pwx, ddy = ewy - pwy;
-            if (ddx*ddx + ddy*ddy > fov2) continue;
+            if (!in_fov(ddx, ddy)) continue;
             int sx = ewx - vx, sy = ewy - vy;
             if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
             attr_t attr = COLOR_PAIR(e->cp);
