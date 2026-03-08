@@ -421,6 +421,13 @@ bool player_move(int dx, int dy) {
     return true;
 }
 
+/* ─── Shot symbol helper ─────────────────────────────────────────────── */
+static char shot_sym(int dx, int dy) {
+    if (dy == 0) return '-';
+    if (dx == 0) return '|';
+    return '*';
+}
+
 /* ─── Shoot ──────────────────────────────────────────────────────────── */
 bool player_shoot(int dx, int dy) {
     Player *p = &G.player;
@@ -433,7 +440,13 @@ bool player_shoot(int dx, int dy) {
         return false;
     }
 
-    /* Ray cast */
+    /* Set up animated projectile */
+    Proj *pr = &G.projs[0];
+    pr->sym      = shot_sym(dx, dy);
+    pr->cp       = CP_ITEM;
+    pr->enemy_shot = false;
+    pr->active   = true;
+
     Room *r = cur_room();
     int cx = p->x + dx, cy = p->y + dy;
     int rng = p->r_rng;
@@ -443,6 +456,10 @@ bool player_shoot(int dx, int dy) {
         if (cx < 0 || cy < 0 || cx >= RT_W || cy >= RT_H) break;
         TileType t = r->tiles[cy][cx];
         if (t == T_WALL || t == T_DOOR_LOCK) break;
+
+        pr->x = cx; pr->y = cy;
+        render_game();
+        napms(40);
 
         for (int i = 0; i < r->n_enemies; i++) {
             Enemy *e = &r->enemies[i];
@@ -465,8 +482,10 @@ bool player_shoot(int dx, int dy) {
         if (hit) break;
         cx += dx; cy += dy;
     }
-    if (!hit) log_msg("Your shot finds nothing.");
 
+    pr->active = false;
+
+    if (!hit) log_msg("Your shot finds nothing.");
     if (p->r_ammo > 0) p->r_ammo--;
     p->turn++;
     return true;
@@ -560,24 +579,42 @@ static bool pos_has_enemy(Room *r, int x, int y) {
 
 static void enemy_shoot_player(Enemy *e) {
     Player *p = &G.player;
-    /* Simple hitscan toward player */
     int ex = e->x, ey = e->y;
     int px = p->x, py = p->y;
     int dx = (px > ex) - (px < ex);
     int dy = (py > ey) - (py < ey);
     /* Only shoot if roughly in a line */
     if (dx == 0 || dy == 0) {
+        Proj *pr = &G.projs[0];
+        pr->sym       = shot_sym(dx, dy);
+        pr->cp        = CP_DANGER;
+        pr->enemy_shot = true;
+        pr->active    = true;
+
         int cx = ex + dx, cy = ey + dy;
         Room *r = cur_room();
         int rng = e->r_rng;
+        bool hit = false;
         while (rng-- > 0) {
-            if (cx == px && cy == py) {
-                enemy_attack_player(e);
-                return;
-            }
+            if (cx < 0 || cy < 0 || cx >= RT_W || cy >= RT_H) break;
             TileType t = r->tiles[cy][cx];
             if (t == T_WALL || t == T_DOOR_LOCK) break;
+
+            pr->x = cx; pr->y = cy;
+            render_game();
+            napms(40);
+
+            if (cx == px && cy == py) {
+                hit = true;
+                break;
+            }
             cx += dx; cy += dy;
+        }
+        pr->active = false;
+
+        if (hit) {
+            enemy_attack_player(e);
+            return;
         }
     }
     log_msg("The %s's shot goes wide.", e->name);

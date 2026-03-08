@@ -292,6 +292,17 @@ static void draw_room(void) {
         }
     }
 
+    /* Projectiles */
+    for (int i = 0; i < MAX_PROJ; i++) {
+        Proj *pr = &G.projs[i];
+        if (!pr->active) continue;
+        int sx = ox + pr->x, sy = oy + pr->y;
+        if (sx < 0 || sy < 0 || sx >= G.gw || sy >= G.gh) continue;
+        attron(COLOR_PAIR(pr->cp) | A_BOLD);
+        mvaddch(sy, sx, pr->sym);
+        attroff(COLOR_PAIR(pr->cp) | A_BOLD);
+    }
+
     /* Boss HP bar (if boss in room) */
     for (int i = 0; i < r->n_enemies; i++) {
         Enemy *e = &r->enemies[i];
